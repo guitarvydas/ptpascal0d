@@ -1,0 +1,118 @@
+pt {
+  Program = kw<"program"> ID FormalParameters ";" Block "."
+ 
+  FormalParameters =
+    | "(" ")" -- empty
+    | "(" FormalParameter CommaFormalID* ")" -- nonempty
+
+  FormalParameter =
+    | kw<"var"> ID -- var
+    |           ID -- id
+    
+  CommaFormalID = "," FormalID
+  FormalID = ID
+
+  Block = ConstantDefinitions? TypeDefinitions? VariableDeclarations? ProcedureDefinition+ kw<"begin"> BeginStatement+
+
+  ConstantDefinitions = kw<"const"> ConstantDefinition*
+  TypeDefinitions = kw<"type"> TypeDefinition*
+  VariableDeclarations = kw<"var"> VariableDeclaration*
+  ProcedureDefinition = kw<"procedure"> ID ProcedureHeading Block ";"
+
+    ConstantDefinition = ID ConstantValue ";"
+    TypeDefinition = ID "=" TypeBody
+
+    ConstantValue =  
+      | Integer
+      | ID
+      | Literal
+
+    TypeBody =
+      | kw<"packed"> kw<"array"> "[" SimpleType "]" kw<"of"> SimpleType -- packedarray
+      |              kw<"array"> "[" SimpleType "]" kw<"of"> SimpleType -- array
+      | kw<"file">                                  kw<"of"> SimpleType -- file
+      |                                                      SimpleType -- simple
+
+    SimpleType =
+      | ID ".." Integer -- idrange
+      | ID -- id
+      | Integer ".." Integer -- intrange
+
+   VariableDeclaration = ID ":" TypeBody ";"
+
+   ProcedureHeading = FormalParameters ";"
+
+
+     BeginStatement = kw<"begin"> Statement* kw<"end">
+
+     Statement =
+       | BeginStatement
+       | IfStatement
+       | WhileStatement
+       | CaseStatement
+       | RepeatStatement
+       | AssignmentStatement
+       | CallStatement
+
+     IfStatement = kw<"if"> Expression kw<"then"> Statement ElseStatement?
+     ElseStatement = kw<"else"> Statement
+
+     WhileStatement = kw<"while"> Expression kw<"do"> Statement
+     CaseStatement = kw<"case"> Expression kw<"of"> CaseAlternative+ kw<"end">
+     RepeatStatement = kw<"repeat"> Statement kw<"until"> Expression
+     AssignmentStatement = LvalSubscript? ":=" Expression
+     CallStatement =
+       | ID "(" ")" -- empty
+       | ID "(" ExprWithFieldWidth ("," ExprWithFieldWidth)* ")" -- nonempty
+
+     ExprWithFieldWidth = Expression (":" Expression)?
+
+       LvalSubscript = "[" Expression "]"
+
+	 
+       CaseAlternative = Integer CommaInteger* ":" Statement
+       CommaInteger = "," Integer
+
+     Expression = 
+       | SimpleExpression "="  SimpleExpression -- eq
+       | SimpleExpression "<>" SimpleExpression -- ne
+       | SimpleExpression "<"  SimpleExpression -- lt
+       | SimpleExpression "<=" SimpleExpression -- le
+       | SimpleExpression ">"  SimpleExpression -- gt
+       | SimpleExpression ">=" SimpleExpression -- ge
+       | SimpleExpression -- other
+
+      SimpleExpression = ("+" | "-")? Term (("+" | "-" | kw<"or">) Term)*
+      Term = 
+        | Factor "*"       Factor -- mul
+        | Factor kw<"div"> Factor -- div
+        | Factor kw<"mod"> Factor -- mod
+        | Factor kw<"and"> Factor -- and
+        | Factor -- other
+	
+      Factor =
+	| Integer -- int
+	| "(" Expression ")" -- parenthesized
+	| kw<"not"> Factor -- not
+	| Literal -- lit
+	| ID IdentifierExtension -- idwithextension
+	| ID -- other
+
+       IdentifierExtension =
+         | "[" Expression "]" -- subscript
+	 | "(" Expression ")" -- paren
+
+       
+	Integer =
+	  | "-" unsignedInteger -- neg
+	  | "+" unsignedInteger -- pos
+	  |     unsignedInteger -- other
+
+	  id<s> = "❲" s "❳"
+	  kw<s> = id<s>
+	  ID = "❲"  idchar+  "❳"
+	  idchar = ~"❲" ~"❳" any
+	  unsignedInteger = digit+
+	  Literal = "‛" litchar* "’"
+	  litchar = ~"‛" ~"’" any
+}

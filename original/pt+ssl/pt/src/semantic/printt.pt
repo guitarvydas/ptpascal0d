@@ -1,0 +1,378 @@
+{ Convert a file of tCode to readable form }
+program PrintTCode (output, tCode);
+
+    const
+	tMultiply = 0;
+	tDivide = 1;
+	tModulus = 2;
+	tAdd = 3;
+	tSubtract = 4;
+	tEQ = 5;
+	tNE = 6;
+	tGT = 7;
+	tGE = 8;
+	tLT = 9;
+	tLE = 10;
+	tAnd = 11;
+	tInfixAnd = 12;
+	tOr = 13;
+	tInfixOr = 14;
+	tNegate = 15;
+	tNot = 16;
+	tChr = 17;
+	tOrd = 18;
+	tEoln = 19;
+	tEOF = 20;
+	tVarParm = 21;
+	tFetchAddress = 22;
+	tFetchInteger = 23;
+	tFetchChar = 24;
+	tFetchBoolean = 25;
+	tAssignBegin = 26;
+	tAssignAddress = 27;
+	tAssignInteger = 28;
+	tAssignChar = 29;
+	tAssignBoolean = 30;
+	tStoreParmAddress = 31;
+	tStoreParmInteger = 32;
+	tStoreParmChar = 33;
+	tStoreParmBoolean = 34;
+	tSubscriptBegin = 35;
+	tSubscriptAddress = 36;
+	tSubscriptInteger = 37;
+	tSubscriptChar = 38;
+	tSubscriptBoolean = 39;
+	tArrayDescriptor = 40;
+	tFileDescriptor = 41;
+	tIfBegin = 42;
+	tIfEnd = 43;
+	tCaseBegin = 44;
+	tWhileBegin = 45;
+	tRepeatBegin = 46;
+	tRepeatControl = 47;
+	tCallBegin = 48;
+	tParmEnd = 49;
+	tProcedureEnd = 50;
+	tWriteBegin = 51;
+	tReadBegin = 52;
+	tPopStack = 53;
+	tLiteralAddress = 54;
+	tLiteralInteger = 55;
+	tLiteralChar = 56;
+	tLiteralBoolean = 57;
+	tLiteralString = 58;
+	tStringDescriptor = 59;
+	tSkipString = 60;
+	tIfThen = 61;
+	tIfMerge = 62;
+	tCaseSelect = 63;
+	tCaseMerge = 64;
+	tCaseEnd = 65;
+	tWhileTest = 66;
+	tWhileEnd = 67;
+	tRepeatTest = 68;
+	tSkipProc = 69;
+	tCallEnd = 70;
+	tLineNumber = 71;
+	tTrap = 72;
+
+    var
+	tCode :  file of integer;
+	{ NtCode : packed array [1..50] of char; }
+	i :  integer;
+	j :  integer;
+	buffer :  integer;
+	lo :  integer;
+	hi :  integer;
+	endOfFile :  Boolean;
+
+    begin
+	{ argv (1, NtCode); }
+	reset (tCode {, NtCode} );
+	endOfFile := false;
+	j := 0;
+	{ skip header }
+	read (tCode, buffer, buffer, buffer);
+	while not eof (tCode) and not endOfFile do
+	    begin
+		write (j : 1, ': ');
+		read (tCode, buffer);
+		j := j + 1;
+		case buffer of
+		    tMultiply:
+			write ('tMultiply');
+		    tDivide:
+			write ('tDivide');
+		    tModulus:
+			write ('tModulus');
+		    tAdd:
+			write ('tAdd');
+		    tSubtract:
+			write ('tSubtract');
+		    tEQ:
+			write ('tEQ');
+		    tNE:
+			write ('tNE');
+		    tGT:
+			write ('tGT');
+		    tGE:
+			write ('tGE');
+		    tLT:
+			write ('tLT');
+		    tLE:
+			write ('tLE');
+		    tAnd:
+			write ('tAnd');
+		    tInfixAnd:
+			write ('tInfixAnd');
+		    tOr:
+			write ('tOr');
+		    tInfixOr:
+			write ('tInfixOr');
+		    tNegate:
+			write ('tNegate');
+		    tNot:
+			write ('tNot');
+		    tChr:
+			write ('tChr');
+		    tOrd:
+			write ('tOrd');
+		    tEoln:
+			write ('tEoln');
+		    tEOF:
+			write ('tEOF');
+		    tVarParm:
+			write ('tVarParm');
+		    tFetchAddress:
+			write ('tFetchAddress');
+		    tFetchInteger:
+			write ('tFetchInteger');
+		    tFetchChar:
+			write ('tFetchChar');
+		    tFetchBoolean:
+			write ('tFetchBoolean');
+		    tAssignBegin:
+			write ('tAssignBegin');
+		    tAssignAddress:
+			write ('tAssignAddress');
+		    tAssignInteger:
+			write ('tAssignInteger');
+		    tAssignChar:
+			write ('tAssignChar');
+		    tAssignBoolean:
+			write ('tAssignBoolean');
+		    tStoreParmAddress:
+			write ('tStoreParmAddress');
+		    tStoreParmInteger:
+			write ('tStoreParmInteger');
+		    tStoreParmChar:
+			write ('tStoreParmChar');
+		    tStoreParmBoolean:
+			write ('tStoreParmBoolean');
+		    tSubscriptBegin:
+			write ('tSubscriptBegin');
+		    tSubscriptAddress:
+			write ('tSubscriptAddress');
+		    tSubscriptInteger:
+			write ('tSubscriptInteger');
+		    tSubscriptChar:
+			write ('tSubscriptChar');
+		    tSubscriptBoolean:
+			write ('tSubscriptBoolean');
+		    tArrayDescriptor:
+			write ('tArrayDescriptor');
+		    tFileDescriptor:
+			write ('tFileDescriptor');
+		    tIfBegin:
+			write ('tIfBegin');
+		    tIfEnd:
+			write ('tIfEnd');
+		    tCaseBegin:
+			write ('tCaseBegin');
+		    tWhileBegin:
+			write ('tWhileBegin');
+		    tRepeatBegin:
+			write ('tRepeatBegin');
+		    tRepeatControl:
+			write ('tRepeatControl');
+		    tCallBegin:
+			write ('tCallBegin');
+		    tParmEnd:
+			write ('tParmEnd');
+		    tProcedureEnd:
+			write ('tProcedureEnd');
+		    tWriteBegin:
+			write ('tWriteBegin');
+		    tReadBegin:
+			write ('tReadBegin');
+		    tPopStack:
+			write ('tPopStack');
+		    tLiteralAddress:
+			begin
+			    write ('tLiteralAddress: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tLiteralInteger:
+			begin
+			    write ('tLiteralInteger: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tLiteralChar:
+			begin
+			    write ('tLiteralChar: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (chr(buffer));
+			end;
+		    tLiteralBoolean:
+			begin
+			    write ('tLiteralBoolean: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tLiteralString:
+			begin
+			    write ('tLiteralString: ');
+			    read (tCode, i);	{ length }
+			    j := j + 1;
+			    write (i : 1);
+			    while i > 0 do
+				begin
+				    read (tCode, buffer);
+				    j := j + 1;
+				    write (chr(buffer));
+				    i := i - 1
+				end;
+			end;
+		    tStringDescriptor:
+			begin
+			    write ('tStringDescriptor: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tSkipString:
+			begin
+			    write ('tSkipString: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tIfThen:
+			begin
+			    write ('tIfThen: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tIfMerge:
+			begin
+			    write ('tIfMerge: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tCaseSelect:
+			begin
+			    write ('tCaseSelect: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tCaseMerge:
+			begin
+			    write ('tCaseMerge: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tCaseEnd:
+			begin
+			    write ('tCaseEnd: ');
+			    read (tCode, lo, hi);
+			    j := j + 3 + hi - lo;
+			    write (lo, hi);
+			    i := hi - lo + 1;
+			    while i > 0 do
+				begin
+				    read (tCode, buffer);
+				    writeln;
+				    write (buffer:1);
+				    i := i - 1;
+				end
+			end;
+		    tWhileTest:
+			begin
+			    write ('tWhileTest: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tWhileEnd:
+			begin
+			    write ('tWhileEnd: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1)
+			end;
+		    tRepeatTest:
+			begin
+			    write ('tRepeatTest: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tSkipProc:
+			begin
+			    write ('tSkipProc: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tCallEnd:
+			begin
+			    write ('tCallEnd: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tLineNumber:
+			begin
+			    write ('tLineNumber: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    write (buffer:1);
+			end;
+		    tTrap:
+			begin
+			    write ('tTrap: ');
+			    read (tCode, buffer);
+			    j := j + 1;
+			    case buffer of
+				0:
+				    begin
+					write ('Halt');
+					endOfFile := true;
+				    end;
+				1: write ('Reset');
+				2: write ('Rewrite');
+				3: write ('Read');
+				4: write ('Readln');
+				5: write ('Write');
+				6: write ('Writeln');
+				7: write ('WriteString');
+				8: write ('WriteInt');
+				9: write ('WriteChar');
+				10: write ('ReadInteger');
+				11: write ('ReadChar');
+			    end
+			end;
+		end;
+		writeln;
+	    end;
+    end.

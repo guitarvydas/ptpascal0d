@@ -1,0 +1,52 @@
+program enFrancais (input, output);
+
+var infinitive : string;
+    root : string;
+
+begin
+    loop
+	write ("Please give me a regular French 'er' verb"); writeln;
+	read (infinitive);
+	write ("Thanks, here is the present conjugation"); writeln;
+	root := infinitive (1 .. length (infinitive) - 2)
+	write ("The root of this verb is '", root, "'"); writeln;
+
+	if infinitive (length (infinitive) - 1 .. length (infinitive)) = 
+		"er" then
+	    begin
+		if root (1) = "a" or root (1) = "e" or root (1) = "i" or
+			root (1) = "o" or root (1) = "u" then
+		    write ("Je ", root, "e")
+		else
+		    write ("J'", root, "e");
+
+		writeln;
+
+		write ("Tu ", root, "es"); writeln;
+		write ("Il ", root, "e"); writeln;
+		writeln;
+
+		if root (length (root)) = "g" then
+		    write ("Nous ", root, "eons")
+		else
+		    write ("Nous ", root, "ons");
+
+		writeln;
+
+		write ("Vous ", root, "ez"); writeln;
+		write ("Ils ", root, "ent"); writeln;
+		writeln
+	    end
+
+	else if infinitive (length (infinitive) - 1 .. length (infinitive)) = 
+		"ir" then
+	    begin
+		write ("I'm too tired to do an 'ir' verb"); writeln
+	    end
+
+	else
+	    begin
+		write ("I don't like the looks of this verb"); writeln
+	    end
+    end loop
+end.

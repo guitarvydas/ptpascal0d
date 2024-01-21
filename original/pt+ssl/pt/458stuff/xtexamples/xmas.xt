@@ -1,0 +1,57 @@
+program xmas (output);
+
+var day : int;
+    n : int;
+const ndays = 12;
+var ordinal : array 1 .. ndays of string;
+var gift : array 1 .. ndays of string;
+
+begin
+    ordinal (1) := "first";
+    ordinal (2) := "second";
+    ordinal (3) := "third";
+    ordinal (4) := "fourth";
+    ordinal (5) := "fifth";
+    ordinal (6) := "sixth";
+    ordinal (7) := "seventh";
+    ordinal (8) := "eighth";
+    ordinal (9) := "ninth";
+    ordinal (10) := "tenth";
+    ordinal (11) := "eleventh";
+    ordinal (12) := "twelfth";
+
+    gift (1) := "A partridge in a pear tree.";
+    gift (2) := "Two turtle doves, and";
+    gift (3) := "Three french hens,";
+    gift (4) := "Four calling birds,";
+    gift (5) := "Five golden rings,";
+    gift (6) := "Six geese a-laying,";
+    gift (7) := "Seven swans a-swimming,";
+    gift (8) := "Eight maids a milking,";
+    gift (9) := "Nine ladies dancing,";
+    gift (10) := "Ten lords a-leaping,";
+    gift (11) := "Eleven pipers piping,";
+    gift (12) := "Twelve drummers drumming,";
+
+
+    write ("The Twelve Days of Christmas."); writeln;
+
+    day := 1;
+    loop
+	writeln; 
+	write ("On the " + ordinal (day) + " day of Christmas"); writeln;
+	write ("My true love sent to me,"); writeln;
+
+	n := day;
+	loop
+	    write (gift (n)); writeln;
+	    n := n - 1;
+	    exit when n = 0
+	end loop;
+
+	exit when day = ndays;
+	day := day + 1
+    end loop;
+
+    writeln; write ("The end."); writeln
+end.

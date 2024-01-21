@@ -1,0 +1,8 @@
+{ Input any number bigger than 999999 and we die! }
+program test (input,output);
+var x : integer;
+begin
+    read (x);
+    write(x);
+    writeln
+end.

@@ -1,0 +1,5 @@
+c27 30
+	lTab = 22;
+	lNewPage = 23;
+	lEndFile = 24;
+.

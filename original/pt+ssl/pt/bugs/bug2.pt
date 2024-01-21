@@ -1,0 +1,5 @@
+{ compiled result crashes }
+program test(input);
+        begin
+            reset (input);
+        end.

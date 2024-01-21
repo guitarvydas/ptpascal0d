@@ -1,0 +1,187 @@
+{ Convert a file of semantic parseStream to readable form }
+program semanticTokens(output, parseStream);
+
+    const
+	sIdentifier = 0;
+	sInteger = 1;
+	sLiteral = 2;
+	sProgram = 3;
+	sParmBegin = 4;
+	sParmEnd = 5;
+	sConst = 6;
+	sType = 7;
+	sVar = 8;
+	sProcedure = 9;
+	sBegin = 10;
+	sEnd = 11;
+	sNegate = 12;
+	sArray = 13;
+	sPacked = 14;
+	sFile = 15;
+	sRange = 16;
+	sCaseStmt = 17;
+	sCaseEnd = 18;
+	sLabelEnd = 19;
+	sExpnEnd = 20;
+	sNullStmt = 21;
+	sAssignmentStmt = 22;
+	sSubscript = 23;
+	sCallStmt = 24;
+	sFieldWidth = 25;
+	sIfStmt = 26;
+	sThen = 27;
+	sElse = 28;
+	sWhileStmt = 29;
+	sRepeatStmt = 30;
+	sRepeatEnd = 31;
+	sEq = 32;
+	sNE = 33;
+	sLT = 34;
+	sLE = 35;
+	sGT = 36;
+	sGE = 37;
+	sAdd = 38;
+	sSubtract = 39;
+	sMultiply = 40;
+	sDivide = 41;
+	sModulus = 42;
+	sInfixOr = 43;
+	sOr = 44;
+	sInfixAnd = 45;
+	sAnd = 46;
+	sNot = 47;
+	sNewLine = 48;
+
+    var
+	parseStream :  file of integer;
+	{ NparseStream :  packed array [1 .. 50] of char; }
+	i :  integer;
+	buffer :  integer;
+
+    begin
+	{ argv (1, NparseStream); }
+	reset(parseStream {, NparseStream} );
+
+	while not eof(parseStream) do
+	    begin
+		read(parseStream, buffer);
+		case buffer of
+		    sIdentifier:
+			begin
+			    write('sIdentifier: ');
+			    read(parseStream, buffer);
+			    write(buffer : 1);
+			end;
+		    sInteger:
+			begin
+			    write('sInteger: ');
+			    read(parseStream, buffer);
+			    write(buffer : 1);
+			end;
+		    sLiteral:
+			begin
+			    write('sLiteral: ');
+			    read(parseStream, i);	{ length }
+			    while i > 0 do
+				begin
+				    read(parseStream, buffer);
+				    write(chr(buffer));
+				    i := i - 1;
+				end
+			end;
+		    sProgram:
+			write('sProgram');
+		    sParmBegin:
+			write('sParmBegin');
+		    sParmEnd:
+			write('sParmEnd');
+		    sConst:
+			write('sConst');
+		    sType:
+			write('sType');
+		    sVar:
+			write('sVar');
+		    sProcedure:
+			write('sProcedure');
+		    sBegin:
+			write('sBegin');
+		    sEnd:
+			write('sEnd');
+		    sNegate:
+			write('sNegate');
+		    sArray:
+			write('sArray');
+		    sPacked:
+			write('sPacked');
+		    sFile:
+			write('sFile');
+		    sRange:
+			write('sRange');
+		    sCaseStmt:
+			write('sCaseStmt');
+		    sCaseEnd:
+			write('sCaseEnd');
+		    sLabelEnd:
+			write('sLabelEnd');
+		    sExpnEnd:
+			write('sExpnEnd');
+		    sNullStmt:
+			write('sNullStmt');
+		    sAssignmentStmt:
+			write('sAssignmentStmt');
+		    sSubscript:
+			write('sSubscript');
+		    sCallStmt:
+			write('sCallStmt');
+		    sFieldWidth:
+			write('sFieldWidth');
+		    sIfStmt:
+			write('sIfStmt');
+		    sThen:
+			write('sThen');
+		    sElse:
+			write('sElse');
+		    sWhileStmt:
+			write('sWhileStmt');
+		    sRepeatStmt:
+			write('sRepeatStmt');
+		    sRepeatEnd:
+			write('sRepeatEnd');
+		    sEq:
+			write('sEq');
+		    sNE:
+			write('sNE');
+		    sLT:
+			write('sLT');
+		    sLE:
+			write('sLE');
+		    sGT:
+			write('sGT');
+		    sGE:
+			write('sGE');
+		    sAdd:
+			write('sAdd');
+		    sSubtract:
+			write('sSubtract');
+		    sMultiply:
+			write('sMultiply');
+		    sDivide:
+			write('sDivide');
+		    sModulus:
+			write('sModulus');
+		    sInfixOr:
+			write('sInfixOr');
+		    sOr:
+			write('sOr');
+		    sInfixAnd:
+			write('sInfixAnd');
+		    sAnd:
+			write('sAnd');
+		    sNot:
+			write('sNot');
+		    sNewLine:
+			write('sNewLine');
+		end;
+		writeln;
+	    end;
+    end.

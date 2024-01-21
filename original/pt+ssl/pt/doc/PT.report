@@ -1,0 +1,3566 @@
+
+
+
+
+
+
+
+
+
+
+
+                       PT: A PASCAL SUBSET
+
+
+                        J. Alan Rosselet
+
+
+                    Technical Report CSRI-119
+                         September 1980
+
+
+
+
+
+
+
+
+
+                Computer Systems Research Institute
+                       University of Toronto
+                          Toronto, Canada
+                              M5S 1A1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The Computer Systems Research Institute (CSRI) is an interdisciplinary 
+group formed to conduct research and development relevant to computer 
+systems and their application.  It is jointly administered by the 
+Department of Electrical Engineering and the Department of Computer 
+Science of the University of Toronto, and is supported in part by the 
+Natural Sciences and Engineering Research Council of Canada.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                            Abstract
+
+    This report presents a compiler that is notable  for  several
+reasons.  It is written to be readable; it is intended to be stu-
+died as a model of compiler structure and as an example  of  good
+programming  style.   It  uses S/SL (Syntax/Semantic Language) to
+drive each of its three passes; therefore it serves as the  prime
+example  for  learning  the effective use of S/SL.  See technical
+report CSRG-118 for an introduction and  specification  of  S/SL.
+It  is a self-compiling compiler, being written in PT, which is a
+subset of Standard Pascal.  Therefore it can be easily ported  to
+other systems using existing Pascal compilers.
+
+    It generates an intermediate stream called T-code that can be
+executed  directed  via  interpretation  or translated further to
+machine language.  This report includes the  description  of  the
+final  pass,  the coder, which accepts T-code and generates effi-
+cient, secure code for the PDP-11.  Coders  for  other  computers
+can be (and have been) easily implemented.  As compiled by itself
+using this coder, the compiler is reasonably fast and small,  and
+it  is a convenient tool for producing software written in the PT
+subset of Pascal.  (The compiler, as well as  an  S/SL  processor
+and an editor written in PT, can be obtained from CSRG.)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        Acknowledgements
+
+    I am indebted to Richard Holt who provided the original  idea
+for  this  work as well as a wealth of helpful suggestions during
+its development.
+
+    Len Vanek provided valuable assistance in the writing of  the
+code generator presented here.  Many parts of this code generator
+are in turn modelled after the  Toronto  Euclid  compiler's  code
+generator [Euclid80].
+
+    David Wortman made numerous  constructive  suggestions  which
+improved the presentation of this report.
+
+    The Department of Computer Science provided financial support
+for the completion of this work.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        Table of Contents
+
+1. Introduction  ............................................   1
+1.1. The Language  ..........................................   1
+1.2. Application Area  ......................................   1
+1.3. The PT Compiler  .......................................   1
+1.4. Origins of PT  .........................................   2
+1.5. Report Organization  ...................................   2
+
+2. Compiler Intermediate Code  ..............................   4
+2.1. The PT Machine  ........................................   4
+2.2. T-code  ................................................   6
+2.3. Implementing T-code  ...................................   6
+
+3. Program Analysis and T-Code Generation  ..................   9
+3.1. Scanner Screener Parser Pass  ..........................   9
+3.1.1. Scanner-Screener  ....................................   9
+3.1.2. Parser  ..............................................  10
+3.2. Semantic Analysis Pass  ................................  10
+3.2.1. Semantic Mechanisms  .................................  10
+3.2.1.1. Symbol and Type Mechanisms  ........................  10
+3.2.1.1.1. Symbol Table  ....................................  11
+3.2.1.1.2. Type Table  ......................................  12
+3.2.1.1.3. Symbol and Type Stacks  ..........................  12
+3.2.1.2. Allocator  .........................................  12
+3.2.1.3. Value Stack  .......................................  14
+3.2.1.4. Count Stack  .......................................  14
+3.2.1.5. Fix Address Stack  .................................  14
+3.2.1.6. T-Code Emission  ...................................  15
+3.2.1.7. Case Stack  ........................................  15
+3.3. Semantic Error Recovery  ...............................  15
+3.4. Portability Issues  ....................................  17
+
+4. Code Generation  .........................................  18
+4.1. Instruction Set and Addressing Modes Utilized  .........  18
+4.2. Semantic Mechanisms  ...................................  20
+4.2.1. Operand Stack  .......................................  20
+4.2.2. Fix Address  .........................................  21
+4.2.3. Case Stack  ..........................................  22
+4.2.4. Emitter  .............................................  22
+4.2.5. Symbol Table  ........................................  22
+4.2.6. Count Stack  .........................................  23
+4.3. Source Coordinates  ....................................  23
+4.4. Translating Boolean Expressions  .......................  23
+4.5. Code Optimization  .....................................  25
+
+5. Conclusion  ..............................................  27
+5.1. The Run-Time Monitor  ..................................  27
+5.1.1. Interactive Terminal Input  ..........................  27
+5.2. Present Status of PT  ..................................  28
+5.3. A Compiler Framework  ..................................  28
+5.4. Language Extensions  ...................................  29
+
+Bibliography   ..............................................  30
+
+PT Language Specification   .................................  33
+
+PT Syntax Diagrams   ........................................  37
+
+T-Code Semantics   ..........................................  41
+
+
+
+                              -ii-
+
+
+
+
+                  Table of Contents, continued
+
+
+T-Code Syntax   .............................................  46
+
+Mapping PT Source to T-Code   ...............................  51
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -iii-
+
+
+
+
+
+
+
+                           Chapter One
+
+
+
+                         1. Introduction
+
+
+
+1.1. The Language
+
+    PT is a small subset of Standard Pascal [Jensen75, Addyman80]
+which  includes  the  capability to define and reference external
+(separately compiled) procedures.
+
+
+
+1.2. Application Area
+
+    The language is intended to be used as a systems  implementa-
+tion  language.   That  is,  it will be used in the production of
+system software such as compilers, text editors and other general
+purpose programs.
+
+
+
+1.3. The PT Compiler
+
+    The primary goals established for the compiler are that it be
+highly  portable,  across  16-bit  machines and also across 8-bit
+machines to a somewhat lesser degree, that it be small  and  sim-
+ple,  that  it  be understandable and well structured and that it
+should produce reasonably good object code.
+
+    The first goal, portability, is  supported  by  the  compiler
+structure  which  isolates  the  machine  independent and machine
+dependent sections in separate passes.  The front end of the com-
+piler  performs  context-free and static semantic checking of the
+source program as it generates intermediate code.  The intermedi-
+ate  code  is  the order code of a hypothetical PT machine.  Thus
+this section of the compiler is not bound to any particular  real
+machine.   Implementation of the intermediate code may proceed in
+several ways as discussed later.  The compiler's  portability  is
+enhanced  by the fact that the compiler is written in the PT sub-
+set of Standard Pascal.
+
+    The compiler is reasonably small and its logic is simple.   A
+benefit  of  the  compiler's  simplicity and small size is that a
+user who finds PT inadequate may  relatively  easily  modify  the
+compiler to provide the desired features.
+
+    The compiler's maintainability, comprehensibility and  struc-
+ture are enhanced by the use of table driven logic in all phases.
+The logic is programmed  in  a  high  level  control  programming
+language,  S/SL  [Cordy80].   S/SL is a dataless language, but it
+does  provide  access  to  abstract  data   objects   which   are
+
+
+
+                               -1-
+
+
+
+
+
+
+
+implemented  in  a  base language, PT in this case.  The abstract
+properties of data objects are cleanly factored from  their  con-
+crete  representations,  since  the  S/SL programmer can access a
+data object only through a set of well defined operations and the
+implementor  of  that  data  object  need only guarantee that the
+defined operations behave as specified without  concern  for  how
+they will be used.
+
+    The PT compiler presented here makes no effort to improve the
+efficiency  of  the  intermediate code it generates, but its code
+generator does perform a  number  of  local  optimizations  which
+result  in  the  production  of reasonably efficient code for the
+PDP-11 machines.
+
+    The compiler is secure in that  all  array  subscripting  and
+case  branching  operations  are  checked for range errors at run
+time.  This checking prevents an  invalid  array  index  or  case
+selector  from destroying part of the program, or worse yet,  the
+run-time monitor or operating system.
+
+
+
+1.4. Origins of PT
+
+    The roots of PT can  be  traced  back  to  the  Zed  language
+[Holt76].   The first descendent of Zed was Speckle [Miceli77], a
+PL/I subset with language features comparable to those  found  in
+PT.   Both  Zed and Speckle were used in compiler writing courses
+and served as the bases for research into very small  implementa-
+tion  languages.  The term one-man language was coined to capture
+the essence of these languages.  PT was designed to  include  the
+language features which the Zed and Speckle projects had shown to
+be most useful.
+
+    The PT compiler's intermediate code is similar to the  inter-
+mediate  codes  of  the Zed and Speckle compilers.  It bears some
+resemblance to OCODE  [Richards71],  and  to  other  intermediate
+languages such as P-Code [Nori74] and Janus [Coleman74].
+
+
+
+1.5. Report Organization
+
+    The formal PT language specification was put in Appendix A to
+allow  easy  referencing  independent  of the rest of the report.
+This appendix does not provide a complete  specification  of  the
+semantics of PT.  It assumes that the reader has access to refer-
+ence material on the Standard Pascal  language  [Jensen75,  Addy-
+man80]  and  proceeds to point out the differences between PT and
+the Standard.
+
+    Appendix A1 specifies the syntax of the PT language in a for-
+mal  notation.   Appendix A2 presents the syntax diagrams for PT.
+These two descriptions complement each other so that it is possi-
+ble  to  determine the syntax of a particular language feature by
+
+
+
+                               -2-
+
+
+
+
+
+
+
+looking at  one  or  both  of  these  descriptions.   The  syntax
+diagrams  clarify  some  parts of the language specification, for
+example expression syntax, which are not given by the notation of
+Appendix A1.  Appendix A1 on the other hand expresses a number of
+restrictions unique to  PT  which  are  not  discernable  in  the
+diagrams.
+
+    Chapter two describes the intermediate code generated by  the
+semantic  analysis  phase of the compiler.  The design issues for
+the code are discussed.  The architecture of the  pseudo  machine
+which  executes  the  intermediate code is given.  The syntax and
+semantics of the intermediate code are given in Appendix B.   The
+chapter  concludes  by presenting methods for compactly and effi-
+ciently representing the intermediate code.
+
+    The syntax and semantic analysis phases of  the  PT  compiler
+are  examined  in  some detail in chapter three.  The emphasis is
+placed on the abstract mechanisms that perform context  sensitive
+analysis and intermediate code generation.
+
+    Chapter four presents the design of a code generator for  the
+PDP-11  family  of  machines.  This chapter like the previous one
+emphasizes the semantic mechanisms  into  which  the  program  is
+organized.   Other topics discussed include the code optimization
+strategies  employed,  Boolean  expression  handling,   and   the
+instruction set and addressing modes utilized.
+
+    Chapter five opens by summarizing the  work  which  has  been
+done.   The  potential use of this PT compiler as a framework for
+the construction of other compilers is considered.  Several  sig-
+nificant  pieces  of  software  which have been written in PT are
+enumerated.  The chapter concludes by proposing two extensions to
+the PT language subset.
+
+    The S/SL programs for the scanner and  parser  are  given  in
+appendix  C.  Appendix D contains the semantic analysis pass S/SL
+program.  The code generator S/SL program is given in appendix E.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               -3-
+
+
+
+
+
+
+
+                           Chapter Two
+
+
+
+                  2. Compiler Intermediate Code
+
+
+
+2.1. The PT Machine
+
+    This chapter introduces the hypothetical PT machine  and  its
+order  code.   The  PT machine code, which will be referred to as
+T-code to avoid confusion with other common pseudo codes such  as
+P-code,  serves  as  the  basis of the PT compiler's portability.
+The PT machine can also serve to define the  semantics  of  a  PT
+program.  The order code of the machine is designed to facilitate
+translation from a high-level language like PT.  The  PT  machine
+has  a  stack  based architecture, whose principal components are
+shown in Figure 2.1.  The PT machine architecture is  similar  to
+that of various real computers, but it is not bound to any one of
+them.
+
+    The first phase of the PT compiler generates  T-code  without
+any  concern  for  how  it  will be implemented.  This leaves the
+implementor of a PT compiler free to choose among several methods
+for actually implementing the T-code.  Four potential implementa-
+tions are:
+
+     1. write a simulator for the PT machine which will then
+          interpretively execute the T-code.  The PT machine
+          structure makes it easy to write a  simulator  for
+          it in a high level language.
+     2. use a macro processing scheme to  convert  a  T-code
+          instruction  into  one or more assembly or machine
+          language instructions for some real computer
+     3. emulate the PT machine by microcoding  its  instruc-
+          tion  set on a real processor as was done for UCSD
+          Pascal's psuedo code [Bowles77] on Western Digital
+          Corporation's Pascal MICROENGINE computer.
+     4. further  translate  the  T-code  into  the  assembly
+          language  or  machine  language of a real machine.
+          The stack architecture of  the  PT  machine  makes
+          code generation natural and relatively easy.
+
+    The PT machine has no concept of input or output  facilities,
+since these are typically very bound up with the operating system
+of the real  machine  to  be  run  on.   They  are  not  machine-
+independent  enough concepts to be gracefully integrated into the
+architecture of the hypothetical PT machine.  Rather than  imple-
+ment  I/O  directly,  the PT machine assumes the presence of con-
+venient high-level primitives which perform the I/O  without  the
+need  to  know how it is actually done.  The pseudo code contains
+trap instructions which serve as interfaces  to  the  I/O  primi-
+tives.
+
+
+
+
+                               -4-
+
+
+
+
+
+
+
+2.2. T-code
+
+    Appendix B1 specifies the semantics  of  PT  pseudo  code  in
+terms  of the PT machine.  Appendix B2 specifies the syntax of T-
+code programs with a T-code parser written in  S/SL.   The  rela-
+tionship  between  PT statements and the T-code is illustrated in
+Appendix B3.  In effect, the semantic analysis  pass  of  the  PT
+compiler  performs  the PT to T-code mapping given in this appen-
+dix.
+
+    The design of an intermediate code such as T-code  is  by  no
+means  a  systematic process.  It requires some degree of experi-
+ence and a willingness to experiment  with  different  possibili-
+ties.   The experience for T-code came for the most part from its
+predecessors the Zed and Speckle intermediate codes.  Most of the
+experimentation  took  place  with the format and variety of trap
+instructions.
+
+    The relatively large number of null instructions  in  various
+guises  that  appear  sprinkled  through the pseudo code may seem
+curious.  In fact the presence of these null codes allows the  T-
+code  corresponding  to  a  legal PT program to be parsed with an
+LL(1) parser.  The T-code parser in appendix  B2  is  actually  a
+skeletal version of the PT code generator.
+
+    The T-code preserves type  information  about  data  objects;
+therefore,  it  can  use  generic  operators rather than having a
+separate operator for each  data  type.   The  presence  of  type
+information  in  the  T-code  improves the efficiency of a T-code
+interpreter, since the interpreter does not  need  to  check  the
+type of its operands before carrying out each operation.
+
+    The PT machine has no concept  of  word  size  or  byte  size
+addressing  granularity.   A PT machine word can be thought of as
+always being just the right size to hold what is in it at a given
+time  with  no waste.  This is a convenient abstraction while the
+implementation of the PT machine is not of concern  to  us.   The
+next  section  explores  ways  in which the T-codes can be imple-
+mented.
+
+
+
+2.3. Implementing T-code
+
+    A PT compiler which produces T-code merely as an intermediate
+step on the way to production of machine code may well choose not
+to concern itself with  potential  optimizations  that  could  be
+applied  to the T-code.  On the other hand, a compiler which exe-
+cutes T-code interpretively might derive benefits in terms of the
+cost  of storing T-code and execution speed by performing some T-
+code manipulation in a separate pass following  the  intermediate
+code  generation  pass.   Several  methods  for  improving T-code
+implementation efficiency are considered below; these methods may
+be applied individually or in combination.
+
+
+
+
+                               -6-
+
+
+
+
+
+
+
+    The most straightforward way of representing a file of T-code
+is  as a file of integer values.  This representation is wasteful
+of space however, since each T-code operator (not  its  operands)
+will  fit  in  a byte (8 bits).  The simple technique of encoding
+all T-code operators as bytes would produce a  substantial  space
+saving  at  the  possible  cost  of  additional execution time to
+decode the T-codes back into integers at the time they were used.
+Other improvements along these lines are possible.  For instance,
+the value portion of literalBoolean and literalChar  T-codes  are
+guaranteed  to fit in a byte, as are the characters of a literal-
+String T-code and the  operands  associated  with  trap  T-codes.
+Furthermore,  many  integer values associated with literalInteger
+T-codes are expressible in a byte.   Integer  operands  could  by
+default  be  packed into a byte with a special operator to handle
+two byte integers.
+
+    A second T-code improvement can be performed quite simply and
+offers  both  time  and  space  advantages.   The null operations
+present in the T-code can be  deleted  in  implementations  which
+make  no use of them (this is possible only if the T-code genera-
+tor insures that only legal T-code programs are  produced,  since
+the  null  operations  provide  the  redundancy needed to perform
+legality checking).  This improvement  is  particularly  advanta-
+geous  when the PT machine is being simulated in software or emu-
+lated on a microcoded machine.
+
+    Another class of possible improvements arises from the  pres-
+ence of manifest constants in the T-code.  (For example, manifest
+expression operands can be folded.) It should be noted that  this
+improvement may not be cost effective in some situations since it
+may entail a considerable amount of work to produce only a slight
+reduction in code size.
+
+    We now consider a final potential  T-code  improvement  which
+offers  a  tradeoff  between  instruction storage cost and inter-
+preter cost.  While it is not hard to  pack  T-code  instructions
+into  bytes,  it  is difficult to squeeze them further, primarily
+because most machine architectures support efficient accessing of
+data only on byte or word boundaries.  Storing a T-code in a byte
+wastes a large part of the byte's information carrying potential,
+since  only  about  seventy  different  T-codes are defined.  The
+improvement proposed here makes use of this excess capacity.
+
+    Case studies have demonstrated that the different members  of
+an  instruction  set  are  used  with  quite different frequency,
+counted both statically by occurrence and dynamically  by  number
+of  times  executed.  In addition, it has been shown that certain
+instruction combinations occur with high frequency [Wortman72].
+
+    If a high frequency instruction combination can  be  replaced
+by a single new "super-instruction" with the same semantics, then
+the size of the program in which it occurs will  be  reduced  and
+execution  time  will probably be improved [Wortman72, Hehner74].
+The excess capacity of the byte (or word)  representation  of  T-
+code  instructions can be used to represent the new T-code super-
+
+
+
+                               -7-
+
+
+
+
+
+
+
+instructions.  Some care must be taken when replacing instruction
+combinations  to  insure  that no instruction in the combination,
+except possibly the first, is the target of a branch  instruction
+elsewhere  in  the  T-code.  A more stringent condition, which is
+probably more easily checked, is  that  no  replaced  combination
+crosses a source statement boundary.
+
+    The catch to this scheme is that as super-instructions become
+more  powerful, that is replace larger combinations of T-codes or
+other super-instructions, the machine which  executes  them  must
+become  smarter.  In the case of an interpreter executing T-code,
+the sequence of interpreter instructions needed to  carry  out  a
+super-instruction  will  typically  be  larger  than the sequence
+needed for a regular T-code.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                               -8-
+
+
+
+
+
+
+
+                          Chapter Three
+
+
+
+            3. Program Analysis and T-Code Generation
+
+
+
+    This chapter describes the portable part of the  PT  compiler
+which  performs analysis of the source program and in the process
+produces PT intermediate code, T-code.  Analysis and intermediate
+code generation are performed in two passes.  The first pass, the
+scanner-screener-parser, checks the syntax of the source  program
+and  produces  a  stream  of  tokens in postfix form.  The second
+pass, the semantic analyzer, checks the static semantics  of  the
+program and synthesizes PT intermediate code.
+
+
+
+
+3.1. Scanner Screener Parser Pass
+
+
+
+3.1.1. Scanner-Screener
+
+
+
+    The scanner routine is responsible for the following actions:
+resolving  the source program into syntax token units, removal of
+noise characters (e.g. blanks, tabs, comments)  from  the  source
+program stream and flagging of lexical errors (e.g. illegal char-
+acters, unclosed literals and unclosed comments).  The S/SL  pro-
+gram which drives the scanner is given in appendix C1.
+
+    The screener routine is a filter which operates on the stream
+of syntax tokens passing from the scanner to the parser.  It dis-
+tinguishes keywords from user defined  identifiers  so  that  the
+scanner does not need to know about keywords.  It enters identif-
+iers into a name table and replaces their textual  representation
+in the stream with numeric name table indices.  The screener con-
+verts  strings  of  characters  representing  integer  tokens  to
+integer  values  and  in  the process enforces the implementation
+defined limit on integer magnitude.
+
+    The scanner-screener module operates as a coroutine with  the
+parser.   Whenever  the parser is ready for a new syntax token it
+invokes  the  scanner-screener  to  retrieve  it.   The  scanner-
+screener runs until it has recognized a single syntax token which
+it returns to the parser.
+
+
+
+
+
+
+
+
+                               -9-
+
+
+
+
+
+
+
+3.1.2. Parser
+
+    The parser is a  straightforward  S/SL  driven  module  which
+checks  the syntactic legality of the source program and converts
+it to a postfix token stream for use  by  the  semantic  analysis
+pass.   The  S/SL portion of the parser is essentially a transli-
+teration of the PT syntax diagrams (see Appendix A2)  with  emit-
+ting actions added to transduce the stream.  The parser S/SL pro-
+gram is listed in appendix C2.
+
+    One of the parser S/SL table walker's important functions  is
+the  handling of syntax errors in the source program.  The syntax
+error recovery routine  is  invoked  whenever  the  parser  table
+walker  detects a mismatch between the actual input token and the
+token expected by the S/SL parsing table.
+
+    An important characteristic of the syntax error repair  stra-
+tegy employed by this PT compiler is that it guarantees that only
+a legal PT program (although not necessarily the intended one) is
+permitted  to  proceed  to later phases of compilation.  Thus the
+semantic analyzer is free to concentrate on checking for semantic
+errors,  such  as type mismatches, without concern about the syn-
+tactic legality of its input.
+
+
+
+3.2. Semantic Analysis Pass
+
+    The main responsibilities of the semantic analysis  pass  are
+as  follows:  to check the static semantics of the source program
+(constructing semantic information tables  in  the  process),  to
+synthesize  T-code  instructions  for  the  source program and to
+assign run-time storage locations to all data objects.
+
+
+
+3.2.1. Semantic Mechanisms
+
+    The semantic analysis module is organized into several seman-
+tic mechanisms or data abstractions [Cordy76, Cordy79].  Semantic
+mechanisms are implemented in PT, but  they  are  manipulated  as
+abstract data objects by the S/SL program.  Brief descriptions of
+the  semantic  analysis  pass  mechanisms  are  presented  below.
+Appendix  D gives the S/SL for this pass, including full descrip-
+tions of the operations provided by each semantic mechanism.
+
+
+
+3.2.1.1. Symbol and Type Mechanisms
+
+    A symbol table is  traditionally  defined  as  the  mechanism
+which  is  used  to  associate  an  identifier with its collected
+attributes (for a more complete exposition of the role of a  sym-
+bol  table  see Aho78, Bauer76).  Here we refine the conventional
+symbol table mechanism into two mechanisms, a symbol table and  a
+
+
+
+                              -10-
+
+
+
+
+
+
+
+type  table,  based on recognition of the special significance of
+type information in a strongly typed  language  such  as  Pascal.
+(Additional motivation for this separation derives from a concern
+for the efficient use of storage, since in general  many  symbols
+may  share a common type.) The symbol table mechanism handles the
+non-type attributes of identifiers such as addressing  and  value
+information,  while the type table mechanism encompasses all type
+related attributes.  The symbol and  type  tables  serve  several
+purposes  among  which  are: semantic error detection and repair,
+and provision of information needed for T-code synthesis and data
+allocation.
+
+
+
+3.2.1.1.1. Symbol Table
+
+    A symbol table entry is used to associate  a  name  with  its
+various  attributes:  a  kind, a value and a set of type informa-
+tion.   A  symbol  kind  describes  the  entity  which  the  name
+represents; examples of kinds are: constant, variable, type, pro-
+cedure and function.  Symbol kind information is  used  to  check
+that  the name is properly used, for instance to be sure the tar-
+get of an assignment is a variable.  A  symbol  value  is  inter-
+preted in conjunction with a kind; for example a constant kind is
+associated with a value while a variable kind is associated  with
+a  data area address.  A symbol's type information is stored in a
+separate type table which is referenced by a type  table  pointer
+within the symbol table.
+
+    At entry to a new name scope, for instance a procedure defin-
+ition,  the  names  defined within that scope are pushed onto the
+symbol table.  At exit from  that  scope,  all  local  names  are
+removed  from  the  symbol table since they can never be accessed
+again. Parameters remain in the symbol table to allow  parameter-
+argument  type compatibility checking, but they are disassociated
+from their names which no longer have significance.
+
+    The lexic level stack, logically a part of the  symbol  table
+mechanism,  serves to make compile-time scope exits efficient and
+to allow easy checks on name locality (for instance, to determine
+if  a  name  that  is  being declared is already known within the
+present scope) by maintaining  symbol  table  scope  information.
+Just  two  operations  are  defined to operate on the lexic level
+stack.  One pushes a symbol table pointer  onto  the  stack,  the
+other  pops  the  stack.   The stack contents are pointers to the
+base entries of all  the  scopes  currently  active.   The  stack
+structure allows for procedure nesting.
+
+
+
+
+
+
+
+
+
+
+
+                              -11-
+
+
+
+
+
+
+
+3.2.1.1.2. Type Table
+
+    The type table contains the type information which is used to
+carry  out  type  compatibility checks (e.g. between the left and
+right sides of assignment statements, between formal  and  actual
+parameters,  between  operands  and operators in expressions).  A
+type table entry consists of: a kind, lower and upper bounds  and
+a reference to further type information.  A type kind is either a
+primitive PT data type (integer, char,  Boolean  or  text)  or  a
+structure  kind  (subrange,  array  or file).  Type bounds can be
+subrange limits, array index limits or procedure parameter counts
+depending  on  the  kind  of  the  entry.   A type reference is a
+pointer to another type  table  entry.   For  scalar  types  this
+reference  is null, since all the necessary type information fits
+in a single type table entry.  Structured types  such  as  arrays
+and  files have a primary type table entry for structure informa-
+tion and a reference to a second type table entry  for  component
+type information.
+
+    Figure 3.1 shows the  relationship  between  the  text  table
+(which  is  managed  by  the screener), name table, symbol table,
+type table and lexic level stack using a sample program fragment.
+
+
+
+3.2.1.1.3. Symbol and Type Stacks
+
+    The symbol and type stacks contain copies of symbol and  type
+table entries respectively.  During declaration processing attri-
+butes are accumulated in these stacks  and  then  copied  to  the
+corresponding  tables.   During expression and statement process-
+ing, attributes of names are retrieved from the tables and copied
+to  the  stacks  to  perform access and type checking.  The stack
+structure permits convenient access to attributes of  identifiers
+within arbitrarily nested statement and expression constructs.
+
+
+
+3.2.1.2. Allocator
+
+    The storage allocation mechanism assigns run-time  data  area
+addresses  (offsets)  to  variables.  The absence of recursion in
+the PT subset allows us to utilize a purely static  data  alloca-
+tion  scheme  within  a  compilation  unit.   Variable addressing
+information  is  communicated  to  later  phases  of  compilation
+through the T-code.
+
+    The data area contains no initialized data, so only its  size
+needs  to  be  retained  for  later reference, and no actual file
+representing the data area is created.  Two types of data objects
+carry  initial values which must be recorded for use at run-time.
+The first of these, array bounds information, is translated  into
+T-code  instructions  to  initialize the array bounds in the data
+area at run-time.  The second, literal strings, are allocated  in
+the  code area, and references to literal strings access the code
+
+
+
+                              -12-
+
+
+
+
+
+
+
+area at run-time.
+
+
+
+3.2.1.3. Value Stack
+
+    In PT, manifest values can occur in constant and type defini-
+tions,  variable  declarations  and  expressions.   The  semantic
+analysis pass uses manifest values from the declaration  portions
+of  the  program  to  build  its symbol and type tables.  In some
+cases the values occurring in the declaration phase of the  input
+stream  must  be  transformed  before  they can be entered in the
+tables.  For example integer values may be  negated  (the  parser
+does  not  fold  negation) or changed in the process of repairing
+semantic errors such as illegal  subrange  bound  specifications.
+During  expression  processing,  values are emitted to the T-code
+stream.  The emitted values may come from  the  input  stream  or
+they may be extracted from the symbol table.
+
+    The value stack mechanism provides operations  to  manipulate
+(for  example  negate or increment) the manifest values occurring
+in the declaration portion of the stream, to enter  these  values
+in  the  symbol  and type tables and to emit values to the T-code
+stream.
+
+
+
+3.2.1.4. Count Stack
+
+    The count stack is used to check  the  semantic  validity  of
+constructs  which require matching numbers of items, such as for-
+mal and actual procedure parameter lists.  It  is  also  used  to
+count  the  occurrences  of  constructs  for  later use in making
+translation decisions.  For example case  alternative  statements
+are  counted during case statement processing so that we know how
+many merge jumps must be backpatched  at  the  end  of  the  case
+statement.  The count stack consists of a stack of integer values
+and a set of simple operations such as  increment  and  decrement
+which modify the top value.
+
+
+
+3.2.1.5. Fix Address Stack
+
+    To generate T-code branching instructions we must in  general
+temporarily   save  T-code  addresses.   Backward  branch  target
+addresses must be saved in translating while  and  repeat  state-
+ments.   If  ,  case  and while statements are translated to code
+containing forward branching instructions.  whose addresses  must
+be  saved  so  that  they  can  be backpatched when their targets
+become known.
+
+    The fix address stack mechanism is used to  save  the  T-code
+addressing  information  needed  to emit branching code.  It pro-
+vides  operations  to  save  and  emit  backward  branch   target
+
+
+
+                              -14-
+
+
+
+
+
+
+
+addresses, to save the address of unresolved forward branches and
+to backpatch forward branches.  The stack  structure  allows  for
+the nested occurrence of these constructs.
+
+
+
+3.2.1.6. T-Code Emission
+
+    The emit mechanism is used to emit the values associated with
+compound  T-code tokens.  It includes operations to emit the text
+of literal strings, the kind field  of  trap  instructions,  case
+branch  tables,  the  addresses of variables, the top value stack
+entry and a  null  (unpatched)  address  for  unresolved  forward
+branch  instructions.  Non-compound T-code tokens, such as T-code
+instructions, are emitted using the S/SL  primitive  emit  opera-
+tion.
+
+
+
+3.2.1.7. Case Stack
+
+    The semantic analysis pass translates  case  statements  into
+T-code which utilizes a branching table to effect the case selec-
+tion at execution time (see Aho78 for a discussion of case state-
+ment  implementation  strategies including branching tables).  To
+construct the branching table, the  semantic  analyzer  uses  the
+case  stack  to accumulate value-address pairs representing label
+values and the T-code addresses of their  associated  statements.
+This  mechanism  is  a  stack  so  that it can handle nested case
+statements.
+
+    The case mechanism provides a case stack display to demarcate
+the  boundaries  between nested case value-address pair sets.  In
+addition, the mechanism provides a lookup operation on the  value
+portion  of the stack to detect duplicate label values within the
+case statement and an operation to push a value-address pair.
+
+
+
+3.3. Semantic Error Recovery
+
+    Syntax error recovery is implicit in the structure of an S/SL
+program (a syntax error is detected by the S/SL table walker when
+the next token in the input  stream  does  not  match  the  token
+requested  by an input action in the S/SL program).  By contrast,
+semantic errors are handled explicitly in the  semantic  analysis
+S/SL program.  Semantic choice operations in the S/SL are used to
+detect semantic errors, and S/SL error  emitting  operations  are
+used  to  produce  error messages.  This method has the advantage
+that the circumstances leading to a semantic error can be clearly
+seen  by  following the S/SL flow of control leading to the point
+of error.
+
+    Semantic error recovery is  achieved  by  insuring  that  all
+semantic  data  structures  are  in  a legal state, just as if no
+
+
+
+                              -15-
+
+
+
+
+
+
+
+error were present.  In some cases, this requirement can  be  met
+without  taking  any overt action.  Other situations, such as the
+detection of an undeclared variable,  require  action,  which  in
+this  case  might consist of supplying default attributes for the
+variable.
+
+
+
+3.4. Portability Issues
+
+    As stated in the introduction, one of the goals set  for  the
+analysis  phase  of  the  PT compiler was that it should be quite
+machine independent.  Two areas which exhibit machine  dependency
+are  the  scanner's  character  set  recognizer  and the semantic
+analyzer's storage allocator.
+
+    Some machines, like the PDP-11, permit data to be  referenced
+down  to the byte level, while others, like the Data General NOVA
+permit referencing of words only.  Also, on some  machines,  like
+the  PDP-11, the most significant byte of a word is stored in the
+higher-address byte of  the  word,  while  on  others,  like  the
+IBM360, the most significant byte is stored in the lowest-address
+byte of the word.  It is probably unreasonable to expect  the  PT
+compiler  to  allow  for  all  machine addressing idiosyncrasies.
+Instead the most useful approach seems to be to  add  a  compiler
+option  (or several if necessary) that will force data allocation
+to be performed in a manner consistent with the machine at  hand.
+It appears to be possible to achieve compatibility with a reason-
+ably large class of machines,  preferably  the  ones  most  often
+encountered, by judicious choice of these compiler toggles.
+
+    Character set portability concerns are confined to  the  ini-
+tialization  routine  that  sets  up the scanner's character type
+map.  This character type map is used to determine which  lexical
+token  class  a given character belongs in (e.g. letter, digit or
+semicolon).  The map is initialized using the  standard  function
+ord,  so no explicit assumptions need to be made about the order-
+ing of the collating  sequence  (although  it  is  convenient  to
+assume   some   properties  such  as  contiguous  digits  in  the
+sequence).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -17-
+
+
+
+
+
+
+
+                          Chapter Four
+
+
+
+                       4. Code Generation
+
+
+
+    The code generation phase of the PT  compiler  translates  T-
+code  to  relocatable PDP-11 machine code.  The logic of the code
+generator (coder) is specified with an S/SL program.  The use  of
+table  driven  logic  has  benefits here as it did in the earlier
+passes.  For instance, a modification to the language may  entail
+changes  in the T-code.  In many cases the impact of such changes
+can be confined to the S/SL portion of  the  coder.   Some  prior
+knowledge  of  the  PDP-11  instruction  set and addressing modes
+would be helpful to the reader of this chapter, although most  of
+the description does not depend on such knowledge.
+
+    All the information received by the code generator  from  the
+semantic  analysis  pass  of the compiler is communicated through
+the T-code stream, no tables are passed.  The coder assumes  that
+the  previous  phase  has generated an error free T-code program.
+Consequently no semantic error checking is performed  on  the  T-
+code.   T-code syntax errors are attributed to a compiler failure
+and cause the coder to abort.
+
+
+
+4.1. Instruction Set and Addressing Modes Utilized
+
+    The addressing modes generated by the coder, which have  been
+assigned  names  intended  to  be  suggestive of their usage, are
+listed in table 4.1.  The coder reserves  three  registers  which
+serve  as:  a  data area base register, a source coordinate (line
+number) register and a trap  vector  base  register.   The  three
+remaining  general purpose registers are left for manipulation of
+temporaries, for case and array subscripting and for  multiplica-
+tion  and  division  instructions.  The coder usually stores tem-
+porary values on the run-time stack; only occasionally is a  tem-
+porary shifted to a register.
+
+    The coder for the PDP-11 assumes the presence of multiply and
+divide   instructions.   The  emission  of  multiply  and  divide
+instructions is localized so that the coder can  easily  be  con-
+verted  to  run on a PDP-11 (or LSI-11) machine which lacks these
+instructions.
+
+
+
+
+
+
+
+
+
+
+
+                              -18-
+
+
+
+
+
+
+
+        semantic type           name            addressing mode
+        ------------            ----            ---------------
+
+
+       simple variable/        simple                x(Ra)
+       value parameter                              {index}
+
+      variable parameter       varParm               @x(Ra)
+                                                {index deferred}
+
+           constant           manifest                 #n
+                                                  {immediate}
+
+      temporary variable        temp                  (SP)
+                                                   {register
+                                                   deferred}
+
+      freeable temporary      freeTemp               (SP)+
+                                                {auto-increment}
+
+        new temporary          newTemp               -(SP)
+                                                {auto-decrement}
+
+       buried temporary      offsetTemp              2(SP)
+                                                    {index}
+
+        array element         arrayRef               @0(SP)
+          reference                                or @2(SP)
+                                                {index deferred}
+
+        freeable array      freeArrayRef             @(SP)+
+          reference                             {auto-increment
+                                                   deferred}
+
+          trap call             trap                 @x(Rb)
+                                                {index deferred}
+
+     code area reference     PCrelative              x(PC)
+                                                   {relative}
+
+
+                        Addressing Modes
+
+                            Table 4.1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -19-
+
+
+
+4.2. Semantic Mechanisms
+
+    The coder's semantic mechanisms are described briefly  below.
+The  S/SL for the coder, including a more detailed description of
+the operations provided by each of its  semantic  mechanisms,  is
+given in appendix E.
+
+4.2.1. Operand Stack
+
+    All expression handling performed by the coder  utilizes  the
+operand  stack.   During  expression processing T-code expression
+operands are accumulated on the stack (this is a  natural  opera-
+tion  since  T-code  expressions occur in postfix order) until an
+operator is encountered at which time the coder selects and emits
+object  code  to  implement  the  operation.  Most of the coder's
+expression optimization is based on information from the  operand
+stack  about  the operands.  After the coder has generated object
+code for an operation it pops the operator's  operands  from  the
+stack.   If the result of this operation can be referenced later,
+then a representation of the  result  must  be  pushed  onto  the
+operand  stack.  (For  example,  if the result is a subexpression
+value it will later be used as an operand for  another  operator,
+but  if  the result is the assignment operation for an assignment
+statement then the  result  can  not  be  referenced  again.)  An
+operand stack entry for an operation result is either a reference
+to the top of the run-time stack or to a register.
+
+    An operand stack entry has three components called  the  kind
+field,  the  value field and the length field.  The kind field is
+used primarily to hold addressing  mode  information  (see  table
+4.1),  the exception being that it may hold a Boolean jump condi-
+tion symbol.  A Boolean jump condition symbol is one of  the  six
+PT  relational  operators  which is implicitly the condition of a
+jump instruction (for example, jump less than).  Table 4.2 illus-
+trates  how  the contents of the kind field are used to interpret
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              
+                              
+                              
+                              
+                              -20-
+
+
+
+
+
+
+
+the contents of the other two fields of an operand stack entry.
+
+
+        kind                value               length
+        ----                -----               ------
+
+      manifest              value           operand length
+
+       simple/             address          operand length
+      varParm/
+      arrayRef
+
+      procedure         code location        address size
+
+      temporary         offset from SP      operand length
+
+      register              unused          register size
+
+    Boolean jump       shunt list head       false branch
+                                              list head
+
+
+                        The Operand Stack
+
+                            Table 4.2
+
+
+
+    A value entry in the stack contains either a  value,  or  the
+first  element  of  a  shunt (true branch) list, depending on the
+contents of the corresponding entry in  the  kind  field.   Shunt
+lists  are  used in the conversion of Boolean expressions to con-
+trol flow, as described below.
+
+    An entry in the length field contains either the  length  (in
+bytes)  of  some data item or the first element of a false branch
+list.  False branch lists, like shunt  lists,  are  used  in  the
+conversion of Boolean expressions to control flow.
+
+4.2.2. Fix Address
+
+    The fix address mechanism is used to perform backpatching  of
+the  code  being  emitted.   (It  is  analogous  to  the semantic
+analysis pass fix address stack mechanism.) The fix address stack
+stores  the  locations  of forward jump instructions whose target
+addresses are not yet known,  and  it  stores  the  locations  of
+instructions  which  will  become  the  targets  of backward jump
+instructions which have not yet been emitted.   The  fix  address
+mechanism  is  also  used  to fill in the target addresses of the
+shunt lists  and  false  branch  lists  associated  with  Boolean
+expression translation (see section 4.4).
+
+
+
+
+
+
+
+                              -21-
+
+
+
+
+
+
+
+4.2.3. Case Stack
+
+    The case stack mechanism in the coder is similar to  the  one
+in  the  semantic  analysis pass.  The primary difference between
+the two is that an entry in the coder's case stack consists of  a
+T-code  address and an object code address (while an entry in the
+semantic analysis pass case stack consists of a label value and a
+T-code  address).   The  coder  makes  a single entry in the case
+stack for each alternative statement  within  a  case  statement.
+Since  case  label  values  are  not preserved in the T-code, the
+coder must use the information from T-code case branch tables  to
+build  object  code  case branch tables.  It achieves this branch
+table transformation using the address pairs stored in  its  case
+stack.
+
+4.2.4. Emitter
+
+    The coder emits all object code through the emitter  semantic
+mechanism.   The  most  important operations in the mechanism are
+the two that emit single and double operand instructions.   These
+two operations take a parameter opcode and determine the address-
+ing modes of their operands from the top (one or two entries)  of
+the  operand  stack.   Additional  special case single and double
+operand emitting operations are provided  to  request  that  tem-
+porary  operands  be  freed  as  a side effect of the instruction
+being emitted.  That is, temp and arrayRef addressing modes  (see
+table  4.1)  are  converted to freeTemp and freeArrayRef by these
+special case operations.
+
+    Two literal string  emitting  operations  are  provided;  one
+emits  the  text  of  a  string,  the other emits the length of a
+string.  Several operations are used to emit branching code.  The
+operations  that  emit backward branches utilize the PDP-11 short
+branch instruction if the target is within range.   An  operation
+is  provided to emit a PC relative case branch table based on the
+contents of  the  case  stack  as  discussed  in  section  4.2.3.
+Finally,  two  operations  are  used  to generate code to perform
+divide and modulus instructions.
+
+
+
+4.2.5. Symbol Table
+
+    The symbol table stores  address  information  about  literal
+strings, procedures and arrays.  Array entries contain additional
+information giving the array index bounds.  When a literal string
+or  procedure  definition is encountered in the T-code stream its
+T-code address and object code address are entered in the  table.
+Whenever  a  reference to a procedure or string is seen in the T-
+code stream its symbol table entry is used to recover its  object
+code  address.  An array entry, consisting of a data area address
+and the array bounds, is created when an array descriptor is seen
+in  the  T-code  stream.  If the array is ever subscripted with a
+manifest subscript value, the index bounds are retrieved from the
+table  to allow a range check and subscripted variable address to
+
+
+
+                              -22-
+
+
+
+
+
+
+
+be calculated.
+
+
+
+4.2.6. Count Stack
+
+    The count stack mechanism  is  used  to  address  the  actual
+parameters  of  an  externally compiled procedure on the run-time
+stack.  The count stack  is  a  stack  of  integer  values.   The
+mechanism has just two operations, one to push a parameter value,
+the other to increment the top stack entry.
+
+
+
+4.3. Source Coordinates
+
+    Mapping a location in an object program to a  source  program
+line  number  can  be achieved in several ways.  One method is to
+emit statements into the object  instruction  stream  to  keep  a
+run-time  source  coordinate  value  updated.   Alternatively,  a
+table,  associating  object  program  offsets  with  source  line
+numbers, may be constructed.
+
+    The prime objectives of a  source  coordinate  mechanism  are
+accuracy and space efficiency.  The second possibility is partic-
+ularly  attractive  for  systems  with  small  primary  memories,
+because  the table can be held on backing store and recalled only
+as necessary.  The first alternative is probably the simplest, as
+no  special  data  structure  is  needed.  The first strategy was
+adopted for this coder; converting the coder  to  use  the  other
+strategy would not be difficult.
+
+    The code generator emits  two  types  of  instructions  which
+update the run-time source coordinate information to keep it con-
+sistent with the line number  in  the  source  program  currently
+being  executed.   One  optimizes to use an INC instruction where
+possible, the other forces a MOV instruction to be  emitted  when
+the  coordinate updating instruction occurs at the top of a basic
+block.
+
+
+
+4.4. Translating Boolean Expressions
+
+    Boolean expressions are traditionally translated  in  one  of
+two ways [Aho78].  The first method associates numeric codes with
+Boolean values, typically zero represents false and one true, and
+proceeds  to  translate a Boolean expression in much the same way
+it would translate an arithmetic expression.  The  second  method
+translates Boolean expressions into control flow, thus represent-
+ing a result by the point reached in the program.  (Note that the
+Pascal  Standard  does not specify which of these implementations
+is to be used.) The first method is superior for Boolean  assign-
+ments, while the second is better for Boolean expressions appear-
+ing in control flow statements.  Case  studies  have  shown  that
+
+
+
+                              -23-
+
+
+
+
+
+
+
+control flow statements containing Boolean expressions occur much
+more frequently than do Boolean assignments,  both  in  terms  of
+number of occurrences in program text and in number of times exe-
+cuted [Wortman72].
+
+    The two methods of translation are equivalent if  expressions
+do  not  have  side effects.  PT expressions cannot have explicit
+side effects because the language  does  not  support  functions;
+however,  an  implicit side effect such as an arithmetic overflow
+or a subscript out of bounds is possible.
+
+    Translating Boolean expressions to control  flow  allows  the
+compiler  to  avoid  evaluation of the entire expression when the
+first part determines the result.   Partial  evaluation  is  more
+efficient  and  safer (in the sense that side effects in parts of
+the expression which need not be evaluated are avoided) than com-
+plete evaluation.
+
+    The coder translates Boolean expressions  into  control  flow
+using a method which costs very little in terms of space overhead
+and is based on the Euclid compiler's method [Holt78].  A Boolean
+expression  is  represented by a single operand stack entry.  The
+kind field contains a jump condition symbol,  such  as  jump  not
+equal.   The  shunt  list field (synonymous with the value field)
+contains a pointer to the first element of the expression's shunt
+list  (true  branch list, so named because the conditional branch
+emitted will shunt around (i.e.  bypass)  the  remainder  of  the
+expression  if  the  condition  tested is true and will otherwise
+(the false list) fall through).   The  shunt  list  contains  the
+addresses  of  all the conditional branch instructions emitted to
+bypass the rest of the expression evaluation tests if the expres-
+sion  result can be determined from the portion of the expression
+which  has  been  evaluated.   These  conditional   exit   branch
+addresses are saved in the shunt list for backpatching when their
+common target  address  becomes  known.   The  false  list  field
+(synonymous  with the length field) contains the first element of
+the expression's false branches list.   False  branches  are  the
+equivalent of falling through the conditional branches emitted to
+exit the expression evaluation.
+
+    The coder takes advantage of the fact that  or  and  not  are
+sufficient  to  represent and using De Morgan's laws.  No code is
+generated for not, the shunt/false lists are simply interchanged.
+The infixor operator (the source statement "a or b" is translated
+to the T-code sequence "a tInfixOr b tOr") is processed by  back-
+patching  the false branch list of the left operand (since if the
+left operand is false the right operand must be evaluated), emit-
+ting  a  conditional branch corresponding to the branch condition
+in the left operand's kind field (since if the condition is  true
+evaluation  of  the  right operand can be bypassed) and inserting
+the address of this branch in the left operand's shunt list.  The
+or operator is processed by merging the left operand's shunt list
+into the right operand's shunt list and popping the left  operand
+from  the operand stack.  The shunt list for a Boolean expression
+is backpatched by the logic  which  handles  translation  of  the
+
+
+
+                              -24-
+
+
+
+
+
+
+
+statement  in  which  the expression is embedded (a control flow,
+assignment or procedure call statement) rather than by the  logic
+that handles translation of the Boolean expression.
+
+
+
+4.5. Code Optimization
+
+    The PT compiler is not an optimizing compiler in  the  tradi-
+tional  sense; nonetheless, it manages to produce quite good code
+by applying simple local optimizations  to  high  frequency  con-
+structs.   One  reason that good code can be produced without too
+much effort is the similarity between the PT machine's order code
+and the PDP-11's order code.
+
+    The coder does the bulk of its optimizations on  expressions,
+particularly  those in assignment  statements.  Assignment state-
+ments are optimized by recognizing the last operator in the right
+side expression.  If one of the operands of this last operator is
+the left side variable,  then  the  operation  can  be  performed
+directly between the left side variable and the other operand.
+
+    Expression optimizations fall into four classes.  First there
+are algebraic simplifications, which reduce the complexity of the
+expression, usually by factoring out manifest constants (that  is
+constants whose values are known at compile time).  PT recognizes
+addition and subtraction of zero and multiplication and  division
+by  one,  and  removes  them.   (While most programmers would not
+consciously write expressions such as these,  the  use  of  named
+constants,  such as those used to encode an S/SL table, increases
+the likelihood of their occurrence.)
+
+    Second, reduction in strength replaces  expensive  operations
+by  less  expensive equivalent ones.  The primary example of this
+in the coder is the replacement of multiplication  by  powers  of
+two with equivalent left shift operations.
+
+    Third, machine idioms are machine  instructions  which  effi-
+ciently  implement special case operations.  The coder uses these
+machine idioms: addition of one is replaced by  increment,  addi-
+tion  of negative one or subtraction of one is replaced by decre-
+ment, multiplication by zero is replaced by a  clear  instruction
+and  a  comparison involving the values negative one, zero or one
+is translated  to  a  test  instruction  rather  than  a  compare
+instruction.   Other  machine  idioms  which are utilized are the
+auto-increment and  auto-decrement  addressing  modes  which  can
+create  or  free  a stack operand as part of the instruction that
+uses it.
+
+    Fourth, constant folding replaces expressions by their values
+at  compile  time  when  all  the  operands have manifest values.
+(This is really a special case of algebraic simplification.)  The
+coder  performs addition, subtraction and negation constant fold-
+ing on the operand stack.  It also folds  array  references  with
+manifest indices.
+
+
+
+                              -25-
+
+
+
+
+
+
+
+    Finally the coder  recognizes  if  statements  with  manifest
+Boolean  control expressions and removes the appropriate unreach-
+able clause.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -26-
+
+
+
+
+
+
+
+                          Chapter Five
+
+
+
+                          5. Conclusion
+
+
+
+    The preceding chapters have introduced  the  PT  language,  a
+hypothetical  PT  machine and its order code, a portable scanner-
+parser-semantic analyzer which emits T-code for the  PT  machine,
+and  a  code  generator  for the PDP-11 family of machines.  This
+chapter describes the run-time monitor needed to run PT programs,
+gives  information  about  the present state of the compiler, and
+offers ideas on the potential of the compiler.
+
+
+
+5.1. The Run-Time Monitor
+
+    The present PT compiler uses a set of run-time  support  rou-
+tines to perform array subscripting and file I/O.  At the expense
+of increased code size, the array  subscripting  could  be  moved
+in-line to improve execution speed.
+
+    The monitor is a machine dependent part of the compiler which
+must be rewritten for each operating system / machine combination
+on which PT will be run; however, its  tasks  are  simple  enough
+that  it  should  be  relatively  easy  to  rewrite.  The monitor
+currently in use at the University of Toronto  is  written  in  a
+combination  of  C [Kernighan78] and PDP-11 assembler and runs on
+PDP-11 machines under the UNIX operating system [Ritchie74].  The
+bulk of the program, as might be expected, deals with file I/O.
+
+
+
+5.1.1. Interactive Terminal Input
+
+    A recognized weakness of Pascal is its failure to  adequately
+consider the case of interactive terminal files in its definition
+of file input.  The worst example of this surfaces when the stan-
+dard file input represents an interactive terminal.  The standard
+file  input  is  automatically  reset  before  program  execution
+begins;  however,  reset performs an implicit read as part of its
+action.  Hence the program cannot begin execution until a charac-
+ter  is  typed  on the terminal.  The problem here and with other
+input files attached to a  terminal  is  Pascal's  implicit  read
+ahead.
+
+    The method of handling interactive input files in  PT,  which
+is based on a paper by Wallace [Wallace79], is simple and it con-
+forms to the Pascal Standard.  The  method  is  simply  to  defer
+actual  physical  input  until  it is needed.  Associated with an
+interactive file is a status which may be full or  empty.   Reset
+sets  the  input  status to full, then does the implied get which
+
+
+
+                              -27-
+
+
+
+
+
+
+
+simply sets the status to empty.  A read request may or  may  not
+do  physical  input,  depending  on  the  status of the file, but
+always leaves the status set to empty.  Eof and eoln do a  physi-
+cal  read only if the status is empty and always leave the status
+set to full.
+
+
+
+5.2. Present Status of PT
+
+    At the University of Toronto, the PT compiler is  running  on
+PDP-11/23,  PDP-11/45  and  PDP-11/50  machines  under  the  UNIX
+operating system.  PT has been used in graduate and undergraduate
+compiler  design courses, as well as to write an S/SL translator,
+a compiler for SP/k [Holt75], a text editor similar to  the  UNIX
+editor  based  on  a  design by Kernighan [Kernighan76], and a PT
+code generator for the MC68000.
+
+
+
+5.3. A Compiler Framework
+
+    The PT compiler's use of S/SL and semantic  mechanisms  makes
+it  suitable  as  a model for the construction of other compilers
+(the PT compiler is in  some  ways  modelled  after  the  Toronto
+Euclid compiler [Euclid80]).
+
+    The scanner-screener-parser pass of the compiler can  readily
+be  adapted  to  scan  and  parse a new source language by making
+appropriate changes to the scanner S/SL  program,  the  scanner's
+table initialization routine and the parser S/SL program.
+
+    The semantic mechanisms used by the PT semantic analysis pass
+are  typical  of  the mechanisms required to implement a semantic
+analyzer for a typed language like Pascal, although  the  mechan-
+isms required  for a language comparable to Standard Pascal would
+be more complex than those used for PT in many cases  (for  exam-
+ple, the type table would have to handle more complex type infor-
+mation and the allocator would have  to  allocate  procedure  and
+function  activation  records).   The semantic mechanisms used by
+the coder would also be applicable to  other  compilers  although
+probably not as directly as the semantic analysis mechanisms.
+
+    The use of S/SL in the semantic  analysis  and  coder  passes
+provides not only a convenient technique for programming in terms
+of abstract data objects, it also enforces the  data  abstraction
+presented  by  the semantic mechanisms (that is, the S/SL program
+can access an abstract data object only  through  the  operations
+provided  by  the semantic mechanisms).  This enforcement is par-
+ticularly helpful when the base language for  the  implementation
+does  not  directly support data abstraction (for example, Pascal
+does not directly support data abstraction while Euclid  provides
+modules to support data abstraction).
+
+
+
+
+
+                              -28-
+
+
+
+
+
+
+
+5.4. Language Extensions
+
+    The addition of user defined functions to PT seems  to  be  a
+modest  task,  since  most  of  the  existing  procedure handling
+mechanisms are directly applicable to functions.  The present set
+of semantic data structures are adequate for functions, as is the
+present T-code.  Implementation of functions  would  entail  S/SL
+program  changes and possibly the addition of new semantic opera-
+tions.
+
+    A second addition which seems both useful and modest is  that
+of  the record type.  To get full benefit from this addition, the
+language must also permit  arrays  and  files  of  records.   The
+present  symbol and type table formats could be used for records,
+but new semantic operations would certainly  be  needed.   Simple
+additions  to  the  T-code  would facilitate record handling, for
+example a dot operator and a special  subscripting  operator  for
+arrays of records.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -29-
+
+
+
+
+
+
+
+                          Bibliography
+
+
+[Addyman80]
+     Addyman, A.M.  A Draft Proposal for Pascal.  SIGPLAN Notices
+     Vol. 15, No. 4  1-66  (April 1980).
+
+[Aho78]
+     Aho, A.V., Ullman,  J.D.   Principles  of  Compiler  Design.
+     Addison-Wesley, Second Printing  (1978).
+
+[Barnard75]
+     Barnard, D.T.  Automatic Generation of Syntax Repairing  and
+     Paragraphing  Parsers.  M.Sc. Thesis, Department of Computer
+     Science, University of Toronto  (1975).
+
+[Bauer76]
+     Bauer, F.L., Eickel, J.  Compiler Construction: An  Advanced
+     Course.  Springer-Verlag  Second Edition  (1976).
+
+[Bowles77]
+     Bowles, K.L.  MicroComputer Problem  Solving  Using  Pascal.
+     Springer-Verlag  (1977).
+
+[Coleman74]
+     Coleman,  S.S.   The  Mobile  Programming   System,   Janus.
+     Software Practice and Experience.  Vol. 4, 5-23 (1974).
+
+[Cordy76]
+     Cordy, J.R.  A Diagrammatic Approach To Programming Language
+     Semantics.   M.Sc.  Thesis,  Department of Computer Science,
+     University of Toronto  (1976).
+
+[Cordy79]
+     Cordy, J.R., Holt, R.C., Wortman, D.B.  Semantic  Charts:  A
+     Diagrammatic   Approach  to  Semantic  Processing.   SIGPLAN
+     Notices  Vol. 14, No. 8  39-49  (August 1979).
+
+[Cordy80]
+     Cordy, J.R., Holt, R.C., Wortman, D.B.  S/SL Syntax/Semantic
+     Language  Introduction  and Specification.  Computer Systems
+     Research Group, University  of  Toronto,   Technical  Report
+     CSRG-118  (1980).
+
+[Euclid80]
+     I.P. Sharp Associates.  Toronto Euclid Compiler.  (1980).
+
+[Habermann73]
+     Habermann,  A.N.   Critical  Comments  on  the   Programming
+     Language Pascal.  Acta Informatica  3,  47-57  (1973).
+
+[Hehner74]
+     Hehner, E.C.R.  Matching Program and Data Representations to
+     a  Computing  Environment.  Ph.D. Thesis, Department of Com-
+     puter Science, University of Toronto  (1974).
+
+
+
+                              -30-
+
+
+
+
+
+
+
+[Holt75]
+     Holt, R.C., Wortman, D.B.  Structured Subsets  of  the  PL/I
+     Language.   Computer  Systems  Research Group, University of
+     Toronto, Technical Report CSRG-55  (1975).
+
+[Holt76]
+     Holt, R.C.  Zed:  A  Very  Modest  Implementation  Language.
+     INFOR Vol. 14, No. 2  169-182  (1976).
+
+[Holt78]
+     Holt, R.C.  Translating  Boolean  Expressions  Into  Control
+     Flow.   Project Euclid Workbook - Paper 49, Computer Systems
+     Research Group, University of Toronto  (1978).
+
+[Jensen75]
+     Jensen, K., Wirth, N.  Pascal User Manual and Report.   Lec-
+     ture  Notes  in Computer Science 18, Springer Verlag, Second
+     Edition (1975).
+
+[Joy79]
+     Joy, W.N., Graham, S.L., Haley, C.B.  Berkeley Pascal User's
+     Manual   Version 1.1.  Computer Science Division, Department
+     of Electrical Engineering and Computer  Science,  University
+     of California,  Berkeley  (1979).
+
+[Kernighan76]
+     Kernighan, B.W., Plauger, P.J.   Software  Tools.   Addison-
+     Wesley  (1976).
+
+[Kernighan78]
+     Kernighan, B.W., Ritchie, D.M.  The C Programming  Language.
+     Prentice Hall  (1978).
+
+[Kristensen74]
+     Kristensen, B.B.,  Madsen,  O.L.,  Jensen,  B.O.   A  Pascal
+     Environment  Machine  (P-Code).  Department of Computer Sci-
+     ence, University of Aarhus, Denmark  (1974).
+
+[Lecarme75]
+     Lecarme, O., Desjardins, P.  More Comments on  the  Program-
+     ming Language Pascal.  Acta Informatica 4, 231-243  (1975).
+
+[Miceli77]
+     Miceli, J.  Some Experiences With a One-Man Language.  M.Sc.
+     Thesis,   Department  of  Computer  Science,  University  of
+     Toronto  (1977).
+
+[Nori74]
+     Nori, K.V., Ammann, U., Jensen, K., Nageli, H.H.  The Pascal
+     <P>  Compiler:   Implementation Notes.  Technical Report 10,
+     Zurich ETH.  (1974)
+
+[Richards71]
+     Richards,  M.   The  Portability  of  the   BCPL   Compiler.
+     Software Practice and Experience, 1, 135-146  (1971).
+
+
+
+                              -31-
+
+
+
+
+
+
+
+[Ritchie74]
+     Ritchie, D.M., Thompson, K.  The UNIX Time  Sharing  System.
+     Communications of the ACM  Vol. 17, No. 7  365-375  (1974).
+
+[Wallace79]
+     Wallace, B.  More on Interactive Input in  Pascal.   SIGPLAN
+     Notices Vol. 14, No. 9  p76 (1979).
+
+[Wortman72]
+     Wortman, D.B.  A Study of Language Directed Computer Design.
+     Ph.D.  Thesis,  Department  of  Computer  Science,  Stanford
+     University  (1972).
+
+[Wirth71]
+     Wirth, N.  The Programming Language Pascal.   Acta  Informa-
+     tica  1, 1 35-63  (1971).
+
+[Wirth76]
+     Wirth,  N.   Algorithms  +  Data  Structures   =   Programs.
+     Prentice-Hall (1976).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -32-
+
+
+
+
+
+
+                           Appendix A1
+
+                      PT :  A Pascal Subset
+
+
+    This document specifies a compatible  subset  of  the  Pascal
+language.   PT  deviates  from Standard Pascal, as defined by the
+Pascal Revised Report, only in allowing external procedures.
+
+
+Syntax
+
+     [item] means the item is optional
+     {item} means the item is repeated zero or more times
+
+       A compilation unit is one of the following:
+
+         a.   program
+
+         b.   procedure  identifier [ ([var] identifier : type
+                  {; [var] identifier : type }) ] ;
+                   block;
+
+       A program is:
+
+            program  identifier (identifier {, identifier }) ;
+               block.
+
+       A routine is:
+
+            procedure  identifier [ ([var] identifier : type identifier
+                {; [var] identifier : type identifier }) ] ;
+                 block;
+
+       A block is one of the following:
+
+         a.   [constants]
+               [types]
+               [variables]
+               {routine}
+               begin
+                   statement  {; statement }
+               end
+
+         b.   external
+
+
+       constants are:
+
+            const  identifier = constant ;
+                     { identifier = constant ; }
+
+       types are:
+
+            type  identifier = type ;
+                   { identifier = type ; }
+
+
+
+                              -33-
+
+
+
+
+
+
+
+
+
+
+       variables are:
+
+            var  identifier : type ;
+                 { identifier : type ; }
+
+       A statement is one of the following:
+
+            a. variable := expression
+            b. procedure identifier [ (expression {, expression }) ]
+            c. begin
+                 statement {; statement }
+                end
+            d. if expression then
+                    statement
+                [ else
+                    statement ]
+            e. case expression of
+                    constant {, constant } : statement
+                    {; constant {, constant } : statement }
+                end
+            f. while expression do
+                 statement
+            g. repeat
+                 statement {; statement }
+                until expression
+            h. empty
+
+    Case label constants must be integers or constant identifiers
+which  represent integers.  Assignment is possible only to scalar
+variables.
+
+
+Constants, Integers and Literals
+
+    A constant is an integer, a literal, or a constant identifier
+(true and false are predefined constant identifiers).  An integer
+constant is a sequence of digits optionally preceded by  a  minus
+sign.   A  literal is a sequence of non-quote characters or twice
+repeated quotes enclosed in quotes.
+
+
+       A type is one of the following:
+
+          Simple Type
+             a.  integer
+             b.  char
+             c.  Boolean
+             d.  text
+             e.  constant .. constant
+
+          Structured Type
+             f.  [ packed ] array  [simple type] of simple type
+             g.  file of simple type
+
+
+                              -34-
+
+
+
+
+
+
+
+
+
+
+    The constant limits of a subrange must be integers  or  named
+constants  representing  integers.  The brackets around the index
+type in the above array type  specification  are  Pascal  special
+symbols  which must appear, not metasymbols indicating optionali-
+ty.  The index type of an  array  variable  must  be  an  integer
+subrange.   The  component  type  of a file type cannot be a file
+type.  All files are external in PT, so each file  variable  must
+be listed in the program header.
+
+
+
+    Expressions can use parenthesis and the operators  listed  in
+the  table  below  in  order of decreasing precedence from top to
+bottom.
+
+            _________________________________________
+                            Operators
+
+             operator     operand type    result type
+            _________________________________________
+            not           Boolean         Boolean
+            *, div, mod   integer         integer
+            and           Boolean         Boolean
+            +, -          integer         integer
+            or            Boolean         Boolean
+            =,<>,<,       integer, char   Boolean
+            <=,>,>=
+            _________________________________________
+
+These operators do not operate on unsubscripted  array  variables
+or file variables.
+
+
+The following procedures are predeclared:
+
+    a.  reset (filename)
+    b.  rewrite (filename)
+    c.  write ([filename,] p1, ... ,pn)
+    d.  writeln [(filename)]
+    e.  read ([filename,] v1, ... ,vn)
+    f.  readln [(filename)]
+
+    The read and write procedures accept  a  variable  number  of
+parameters.   When writing to or reading from a file which is not
+a textfile, each parameter must be of the file's component  type.
+If the file being written is a textfile, each parameter pi to the
+write procedure must be of the form:
+
+     e  [ : w ]
+
+where e and w are expressions.  e is the value to be written  and
+is  of  type  integer,  char,  Boolean,  or  string (a literal or
+equivalently packed array  [1..n]  of  char).   w,  the  optional
+minimum field width, must be a positive integer and indicates the
+
+                              -35-
+
+
+
+
+
+
+
+
+
+minimum number of characters to be written.  If  the  file  being
+read  is  a  textfile,  each  parameter  vi to the read procedure
+denotes a variable of type integer or char.
+
+
+These functions are predeclared:
+
+   a. ord (char)
+   b. chr (integer)
+   c. eoln [(filename)]
+   d. eof [(filename)]
+
+
+Input and output are predeclared file variables.
+
+
+    Procedures may not be called recursively and must be  defined
+before  they  are referenced.  A procedure declared with external
+as its body is assumed to be separately compiled.  A  compilation
+unit  is either a program or a routine.  Separately compiled rou-
+tines can be called from other programs or routines, but programs
+cannot  be  called.  Array and file formal parameters must be de-
+clared as var.
+
+
+    The Pascal language employs a number of special symbols among
+which are:
+
+     downto    for       function  goto      in        label
+     nil       record    set       to        with
+
+as well as the words printed in boldface letters  in  the  syntax
+specifications  above.  These reserved words may not be used out-
+side their context within the language, and in particular may not
+be used as identifiers.
+
+
+The following Pascal features are not in the PT subset:
+
+     - real types
+     - user defined enumerated types
+     - powersets and the in operator
+     - pointers and dynamic storage allocation
+     - records and the with statement
+     - multi-dimensional arrays
+     - the for statement
+     - labels and the goto statement
+     - characters as subscripts, subrange bounds or case selectors
+     - comparison of string types
+     - assignment of non-scalar types
+     - non-scalar parameters passed by value
+     - procedures as parameters
+     - functions (other than ord, chr, eoln and eof which are predefined)
+     - predeclared procedures other than write, writeln, read, readln, 
+       reset and rewrite
+
+                              -36-
+
+
+
+
+
+
+
+(PT Syntax Diagrams)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -37-
+
+
+
+
+
+
+
+                           Appendix B1
+
+                        T-Code Semantics
+
+
+    PT pseudo code serves as a  basis  for  portability  and  was
+designed  to  facilitate  translation from the source language to
+psuedo code.  The psuedo code is executed by  a  hypothetical  PT
+computer  whose  architecture  is  shown  in  Figure 1.  Figure 2
+explains the notation that is used below.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        Stack :                 expression stack
+        L, R :                  temporary variables
+        IP :                    instruction pointer
+        Memory :                data area
+        Stack <--(expression) : push expression value onto Stack
+        variable <-- Stack :    pop Stack and assign
+                                popped value to variable
+
+                            Figure 2
+
+
+
+
+
+
+
+
+
+                              -41-
+
+
+
+
+
+
+
+Binary Operations
+
+        L<--Stack; R<--Stack; Stack<--(L operation R)
+
+Instruction     Operation         Operand Types         Result Type
+
+ multiply           *                integer              integer
+  divide           DIV                  "                    "
+  modulus          MOD                  "                    "
+    add             +                   "                    "
+ subtract           -                   "                    "
+
+    eq              =            integer or char          boolean
+    ne              <>              "        "               "
+    gt              >               "        "               "
+    ge              >=              "        "               "
+    lt              <               "        "               "
+    le              <=              "        "               "
+
+    and            AND               boolean              boolean
+ infixAnd        null op                "                    "
+    or             OR                   "                    "
+  infixOr        null op                "                    "
+
+
+Unary Operators
+
+        L<--Stack; Stack<--(operation L)
+
+Instruction     Operation         Operand Type          Result Type
+
+   negate           -               integer               integer
+    not            NOT              boolean               boolean
+    chr            CHR              integer                char
+    ord            ORD               char                 integer
+    eoln           EOLN             integer               boolean
+    eof            EOF              integer               boolean
+
+
+Addressing
+
+
+        literalAddress (address)        Stack<--(address)
+        literalInteger (integer)        Stack<--(integer)
+        literalChar (char)              Stack<--(char)
+        literalBoolean (boolean)        Stack<--(boolean)
+        skipString (code loc)           IP := (code loc)
+        literalString                   null op
+        stringDescriptor (address)      Stack<--(address)
+
+        fetchAddress                    L<--Stack; Stack<--Memory[L]
+        fetchInteger                        "             "
+        fetchChar                           "             "
+        fetchBoolean                        "             "
+
+
+
+
+                              -42-
+
+
+
+
+
+
+
+        assignBegin                     null op
+        assignAddress                   R<--Stack; L<--Stack; Memory[L] := R
+        assignInteger                       "           "           "
+        assignChar                          "           "           "
+        assignBoolean                       "           "           "
+
+        storeParmAddress                R<--Stack; L<--Stack; Memory[R] := L
+        storeParmInteger                    "           "           "
+        storeParmChar                       "           "           "
+        storeParmBoolean                    "           "           "
+        arrayDescriptor                     "           "           "
+
+        subscriptBegin                  null op
+        subscriptAddress                R<--Stack; L<--Stack; Stack<--(L + R)
+        subscriptInteger                    "           "           "
+        subscriptChar                       "           "           "
+        subscriptBoolean                    "           "           "
+
+
+Selection and Repetition
+
+        ifBegin                         null op
+        ifThen (code loc)               R<--Stack; if ~R then
+                                                        IP := (code loc)
+        ifMerge (code loc)              IP := (code loc)
+        ifEnd                           null op
+
+        caseBegin                       null op
+        caseSelect (table loc)          L<--Stack; R<--Memory[(table loc)];
+                                        IP := Memory[(table loc) + 2 + L - R]
+        caseMerge (code loc)            IP := (code loc)
+        caseEnd                         null op
+
+        whileBegin                      null op
+        whileTest (code loc)            R<--Stack; if ~R then
+                                                        IP := (code loc)
+        whileEnd (code loc)             IP := (code loc)
+
+        repeatBegin                     null op
+        repeatControl                   null op
+        repeatTest (code loc)           R<--Stack; if ~R then
+                                                        IP := (code loc)
+
+
+Procedures
+
+        callBegin                       null op
+        skipProc (code loc)             IP := (code loc)
+        callEnd (code loc)              Return Stack<--
+                                                (location beyond this call);
+                                                IP := (code loc)
+        procedureEnd                    IP<--Return Stack
+        varParm                         null op
+        parmEnd                         null op
+        externalProc                    null op
+
+
+
+                              -43-
+
+
+
+
+
+
+
+        writeBegin                      null op
+        readBegin                       null op
+
+
+Source Coordinate
+
+        lineNumber (integer)            Line Register := (integer)
+
+
+Stack Manipulation
+
+        popStack                        <--Stack
+
+
+Trap
+
+        trap (trap value)               trap value := (trap value)
+             [(operands)]
+
+
+a)      trap halt                       program termination
+
+b)      trap reset                      resets (file) to beginning for
+             (fileDescriptor)           reading
+
+c)      trap rewrite                    prepares (file) to be rewritten
+             (fileDescriptor)           from the beginning
+
+d)      trap write                      write value to (file)
+             (fileDescriptor)           (assumes length and location
+                                        of value are on the stack)
+
+e)      trap writeString                write string to (file)
+             (fileDescriptor)           (assumes field width,
+                                        string location are on Stack -
+                                        listed in order from Stack top)
+
+f)      trap writeInteger               write integer to (file)
+             (fileDescriptor)           (assumes field width, integer value
+                                        are on Stack)
+
+g)      trap writeChar                  write char to (file)
+             (fileDescriptor)           (assumes field width, char value
+                                        are on Stack)
+
+h)      trap writeln                    write a newline character
+             (fileDescriptor)           to (file)
+
+i)      trap read                       read variable from (file)
+             (fileDescriptor)           (assumes length and location
+                                        of variable are on the stack)
+
+j)      trap readInteger                read integer from (file)
+             (fileDescriptor)           (assumes variable location
+                                        is on the stack)
+
+
+
+                              -44-
+
+
+
+
+
+
+
+k)      trap readChar                   read char from (file)
+             (fileDescriptor)           (assumes variable location
+                                        is on the stack)
+
+l)      trap readln                     read from (file) until a
+             (fileDescriptor)           newline character is read
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -45-
+
+
+
+
+
+
+
+                           Appendix B2
+
+                          T-Code Syntax
+
+
+Input :
+% input token definitions not shown here
+        ;
+
+rules
+
+CompilationUnit :
+        [
+            | tExternalProc:
+                @Routine                % An external procedure
+            | *:
+                @Block                  % A program
+        ];
+
+Routine :
+        {[                      % store argument values
+                                % in parameter variables
+            | tParmEnd:
+                >
+            | tLiteralAddress:
+                [
+                    | tStoreParmAddress:
+                    | tStoreParmInteger:
+                    | tStoreParmChar:
+                    | tStoreParmBoolean:
+                ]
+        ]}
+        @Block
+        tProcedureEnd;
+
+Block :
+        {[
+            | tSkipString:
+                % Named literal string constants
+                tLiteralString
+            | tLiteralInteger:
+                % Initialize array and file descriptors
+                tLiteralAddress
+                [
+                    | tArrayDescriptor:
+                        tLiteralInteger
+                        tLiteralAddress
+                        tArrayDescriptor
+                    | tFileDescriptor:
+                ]
+            | *:
+                >
+        ]}
+        {[                      % local procedure definitions
+            | tSkipProc:
+
+
+
+                              -46-
+
+
+
+
+
+
+
+                @Routine
+            | *:
+                >
+        ]}
+        @Statement;
+
+Statement :
+        {[
+            | tAssignBegin:  @AssignStmt
+            | tCallBegin:  @CallStmt
+            | tIfBegin:  @IfStmt
+            | tWhileBegin:  @WhileStmt
+            | tRepeatBegin:  @RepeatStmt
+            | tCaseBegin:  @CaseStmt
+            | tWriteBegin:  @WriteProc
+            | tReadBegin:  @ReadProc
+            | tTrap:
+                [
+                    | tLiteralInteger:
+                        % Length of data to be read, for a read trap.
+                    | *:
+                ]
+                [
+                    | tLiteralAddress:
+                        % File descriptor variable
+                        @VariableReference
+                    | *:
+                ]
+            | *:        % empty statement or end of statement list
+                >
+        ]};
+
+AssignStmt :
+        @Variable
+        @Expression
+        [
+            | tAssignAddress:
+            | tAssignInteger:
+            | tAssignChar:
+            | tAssignBoolean:
+        ];
+
+CallStmt :
+        {[
+            | tCallEnd:
+                >
+            | *:                % push arguments onto stack
+                @Expression
+                [
+                    | tVarParm:         % variable parameter
+                    | *:
+                ]
+                tParmEnd
+        ]};
+
+
+
+
+                              -47-
+
+
+
+
+
+
+
+IfStmt :
+        @Expression
+        tIfThen  @Statement             % then clause
+        [
+            | tIfMerge:  @Statement     % else clause
+            | *:
+        ]
+        tIfEnd;
+
+WhileStmt :
+        @Expression
+        tWhileTest
+        @Statement
+        tWhileEnd;
+
+RepeatStmt :
+        @Statement
+        tRepeatControl
+        @Expression
+        tRepeatTest;
+
+CaseStmt :
+        @Expression
+        tCaseSelect
+        @Statement
+        tCaseMerge
+        {[
+            | tCaseEnd:
+                >
+            | *:
+                @Statement
+                tCaseMerge
+        ]};
+
+WriteProc :
+        @WriteParameter
+        {[
+            | tCallEnd:
+                >
+            | *:
+                @WriteParameter
+        ]};
+
+WriteParameter :
+        @Expression
+        tTrap
+        tPopStack
+        tPopStack
+        tParmEnd;
+
+
+ReadProc :
+        @ReadParameter
+        {[
+            | tCallEnd:
+
+
+
+                              -48-
+
+
+
+
+
+
+
+                >
+            | *:
+                @ReadParameter
+        ]};
+
+ReadParameter :
+        @Variable
+        tTrap
+        tPopStack
+        tParmEnd;
+
+Variable :                      % put variable address on stack
+        tLiteralAddress
+        [
+            | tFetchAddress:            % variable parameter
+            | *:
+        ]
+        [
+            | tSubscriptBegin:
+                @Expression
+                [
+                    | tSubscriptInteger:
+                    | tSubscriptChar:
+                    | tSubscriptBoolean:
+                ]
+            | *:                % unsubscripted variable
+        ];
+
+Expression :            % T-code expressions are in postfix form
+        [
+            | tLiteralAddress:
+                @VariableReference
+            | tLiteralInteger:
+            | tLiteralChar:
+            | tLiteralBoolean:
+            | tStringDescriptor:
+            | tSkipString:
+                tLiteralString
+                tStringDescriptor
+        ]
+        @Operators
+        {
+            [
+                | tLiteralAddress:
+                    @VariableReference
+                | tLiteralInteger:
+                | tLiteralChar:
+                | tLiteralBoolean:
+                | tStringDescriptor:
+                | tSkipString:
+                    tLiteralString
+                    tStringDescriptor
+                | *:
+                    >
+            ]
+
+
+
+                              -49-
+
+
+
+
+
+
+
+            @Operators
+        };
+
+VariableReference :             % put variable value on stack
+        [
+            | tFetchAddress:    % variable parameter
+            | *:
+        ]
+        [
+            | tSubscriptBegin:
+                @Expression
+                [
+                    | tSubscriptAddress:
+                    | tSubscriptInteger:
+                    | tSubscriptChar:
+                    | tSubscriptBoolean:
+                ]
+            | *:
+        ]
+        [       % replace variable address by variable value
+            | tFetchAddress:
+            | tFetchInteger:
+            | tFetchChar:
+            | tFetchBoolean:
+        ];
+
+Operators :
+        {[
+            | tNot:
+            | tEoln:
+            | tEOF:
+            | tChr:
+            | tOrd:
+            | tMultiply:
+            | tDivide:
+            | tModulus:
+            | tAnd:
+            | tInfixAnd:
+            | tNegate:
+            | tAdd:
+            | tSubtract:
+            | tOr:
+            | tInfixOr:
+            | tEQ:
+            | tNE:
+            | tLT:
+            | tLE:
+            | tGT:
+            | tGE:
+            | *:
+                >
+        ]};
+
+end
+
+
+
+
+                              -50-
+
+
+
+
+
+
+
+                           Appendix B3
+
+Mapping PT Source to T-Code
+
+
+    The PT language syntax is listed in the  left  column  below.
+Beside  each PT source construct is the pseudo code into which it
+is translated.  PT keywords  and  pseudo  code  instructions  are
+typed in upper case letters.
+
+
+Notation:  when the word "type" appears appended to another word,
+           it represents one of: address, integer, char, boolean.
+
+           [item] means the item is optional
+           {item} means zero or more of item
+
+
+Program:
+
+PROGRAM  identifier
+  (identifier {, identifier}) ;
+    [constants]                         {SKIPSTRING  LITERALSTRING}
+    [types]
+    [variables]                         {LITERALINTEGER  LITERALADDRESS
+                                            ARRAYDESCRIPTOR}
+    {routine}                           {SKIPPROC  routine}
+    BEGIN
+        statement {; statement}         statement  {statement}
+    END .                               TRAP  HALT
+
+
+
+    No distinction is made between externally compiled and  local
+routine  definitions  here  since  the difference between the two
+(formal parameter type specifications) is invisible at the T-code
+level.
+
+Routine:
+
+PROCEDURE  identifier
+  [([VAR]  identifier :                 [LITERALADDRESS  STOREPARMtype
+                type identifier
+    {;[VAR]  identifier :                {LITERALADDRESS  STOREPARMtype}]
+                type identifier})];     PARMEND
+    EXTERNAL ;                          EXTERNALPROC
+      |  ( [constants]                   | ( {SKIPSTRING  LITERALSTRING}
+           [types]
+           [variables]                       {LITERALINTEGER
+                                                LITERALADDRESS
+                                                ARRAYDESCRIPTOR}
+           {routine}                         {SKIPPROC  routine}
+           BEGIN
+               statement                       statement
+               {; statement}                   {statement}  )
+
+
+
+                              -51-
+
+
+
+
+
+
+
+           END ; )                      PROCEDUREEND
+
+
+Statement:
+
+a)  variable := expression              ASSIGNBEGIN  variable
+                                            expression  ASSIGNtype
+
+b)  procedure identifier                CALLBEGIN
+      [(expression {, expression})]       {expression [VARPARM] PARMEND}
+                                        CALLEND
+
+c)  BEGIN
+        statement  {; statement}        statement  {statement}
+    END
+
+d)  IF  expression  THEN                IFBEGIN  expression  IFTHEN
+        statement                           statement
+    [ELSE                               [IFMERGE
+        statement]                          statement]
+                                        IFEND
+
+e)  WHILE  expression  DO               WHILEBEGIN expression WHILETEST
+        statement                           statement
+                                        WHILEEND
+
+f)  REPEAT                              REPEATBEGIN
+        statement  {; statement}            statement  {statement}
+    UNTIL  expression                   REPEATCONTROL
+                                          expression  REPEATTEST
+
+g)  CASE  expression  OF                CASEBEGIN expression CASESELECT
+      constant {, constant} :
+                statement                 statement  CASEMERGE
+      {; constant {, constant} :
+                statement}                {statement  CASEMERGE}
+    END                                 CASEEND
+
+h)  empty
+
+
+Variable:
+
+identifier  [ [expression] ]            LITERALADDRESS  [FETCHADDRESS]
+                                          [SUBSCRIPTBEGIN  expression
+                                                SUBSCRIPTtype]
+
+
+Standard Procedures:
+
+a)  RESET  (filename)                   TRAP  RESET
+                                          LITERALADDRESS  [FETCHADDRESS]
+                                                FETCHINTEGER
+
+
+
+
+
+                              -52-
+
+
+
+
+
+
+
+b)  REWRITE  (filename)                 TRAP  REWRITE
+                                          LITERALADDRESS  [FETCHADDRESS]
+                                                FETCHINTEGER
+
+c)  WRITE  ([filename,]                 WRITEBEGIN
+        p1, ... ,pn)                      expression  expression
+                                          TRAP  ( WRITE |
+                                                  WRITESTRING |
+                                                  WRITEINTEGER |
+                                                  WRITECHAR )
+                                          LITERALADDRESS  [FETCHADDRESS]
+                                                FETCHINTEGER
+                                          POPSTACK  POPSTACK  PARMEND
+                                          { expression  expression
+                                            TRAP  ( WRITE |
+                                                    WRITESTRING |
+                                                    WRITEINTEGER |
+                                                    WRITECHAR )
+                                            LITERALADDRESS [FETCHADDRESS]
+                                                FETCHINTEGER
+                                            POPSTACK  POPSTACK  PARMEND }
+                                        CALLEND
+
+
+d)  WRITELN [(filename)]                TRAP  WRITELN
+                                          LITERALADDRESS  [FETCHADDRESS]
+                                                LITERALINTEGER
+
+
+e)  READ  ([filename,]                  READBEGIN
+                v1, ... ,vn)              variable
+                                          TRAP  ( ( READ
+                                                   LITERALADDRESS
+                                                        [FETCHADDRESS]
+                                                        FETCHINTEGER
+                                                   LITERALADDRESS
+                                                        [FETCHADDRESS]
+                                                        FETCHINTEGER
+                                                  ) |
+                                                  ( ( READINTEGER |
+                                                      READCHAR )
+                                                      LITERALADDRESS
+                                                        [FETCHADDRESS]
+                                                        FETCHINTEGER )
+                                                )
+                                          POPSTACK  PARMEND
+                                          { variable
+                                            TRAP  ( ( READ
+                                                   LITERALADDRESS
+                                                        [FETCHADDRESS]
+                                                        FETCHINTEGER
+                                                   LITERALADDRESS
+                                                        [FETCHADDRESS]
+                                                        FETCHINTEGER
+                                                  ) |
+
+
+
+                              -53-
+
+
+
+
+
+
+
+                                                  ( ( READINTEGER |
+                                                      READCHAR )
+                                                      LITERALADDRESS
+                                                        [FETCHADDRESS]
+                                                        FETCHINTEGER )
+                                                )
+                                            POPSTACK  PARMEND }
+                                        CALLEND
+
+
+f)  READLN [(filename)]                 TRAP  READLN
+                                          LITERALADDRESS [FETCHADDRESS]
+                                                FETCHINTEGER
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -54-
+
+
+
+
+
+
+
+Expression:
+
+simpleExpn  [ ( = | <> | <              operand  operators
+    | <= | > | >= )  simpleExpn]          {operand  operators}
+
+
+SimpleExpn:                             Operand:
+
+[-]  term  { (+ | - | OR)  term }       LITERALADDRESS  [FETCHADDRESS]
+                                            [SUBSCRIPTBEGIN  expression
+                                            SUBSCRIPTtype]  [FETCHtype]
+Term:                                     | LITERALINTEGER
+                                          | LITERALCHAR
+factor  { (* | DIV | MOD | AND)           | LITERALBOOLEAN
+                        factor}           | [SKIPSTRING  LITERALSTRING]
+                                                STRINGDESCRIPTOR
+
+Factor:                                 Operators:
+
+variable                                { NOT
+  | integer                               | CHR
+  | literal                               | ORD
+  | TRUE                                  | MULTIPLY
+  | FALSE                                 | DIVIDE
+  | CHR (expression)                      | MODULUS
+  | ORD (expression)                      | AND
+  | EOLN [(filename)]                     | INFIXAND
+  | EOF [(filename)]                      | NEGATE
+  | NOT factor                            | ADD
+  | (expression)                          | SUBTRACT
+                                          | OR
+                                          | INFIXOR
+                                          | EQ
+                                          | NE
+                                          | LT
+                                          | LE
+                                          | GT
+                                          | GE
+                                          | EOF
+                                          | EOLN  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              -55-
+
+

@@ -1,0 +1,50 @@
+program boxes (input, output);
+
+var top : string;
+    middle : string;
+    bottom : string;
+
+    width : int;
+    height :int;
+    Nacross :int;
+    Ndown : int;
+
+begin
+    write ("enter box width and height: ");
+    read (width, height);
+    write ("enter number of boxes across and down: ");
+    read (Nacross, Ndown);
+
+    top := "";
+    middle := "";
+    bottom := "";
+
+    for i := 0 to width * Nacross do
+	begin
+	    if i mod width = 0 then
+		begin
+		    top := top + " ";
+		    middle := middle + "!";
+		    bottom := bottom + "!"
+		end
+	    else
+		begin
+		    top := top + "_";
+		    middle := middle + " ";
+		    bottom := bottom + "_"
+		end;
+	end;
+
+    write (top); writeln;
+
+    for i := 1 to Ndown do
+	begin
+	    for j := 1 to height - 1 do
+		begin
+		    write (middle); writeln;
+		end
+
+	    write (bottom); writeln;
+	end
+
+end.

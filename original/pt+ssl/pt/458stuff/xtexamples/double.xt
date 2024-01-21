@@ -1,0 +1,12 @@
+program doubleTrouble (input, output);
+
+var word : string;
+
+begin
+    write ("Anything you can say, I can say twice."); writeln;
+    loop
+	read (word);
+	exit when word = "";
+	write (word + word); writeln
+    end loop
+end.

@@ -1,0 +1,25 @@
+c52 75
+	oEmitProcLabel = 64; { (16) }
+	oEmitNone = 65; { (17) }
+	oEmitSingle = 66; { (17) }
+	oEmitDouble = 67; { (17) }
+	oEmitString = 68;
+	oEmitStringLength = 69;
+	oEmitConditionalForwardBranch = 70;
+	oEmitUnconditionalForwardBranch = 71;
+	oEmitConditionalBackwardBranch = 72;
+	oEmitUnconditionalBackwardBranch = 73;
+	oEmitSourceCoordinate = 74;
+	oEmitMergeSourceCoordinate = 75;
+	oEmitCaseMergeBranch = 76;
+	oEmitCaseBranchTable = 77;
+	oCasePush = 78;
+	oCasePop = 79;
+	oCaseEnterTCodeAddress = 80;
+	oCaseEnterVariantAddress = 81;
+	oCaseEnterMergeAddress = 82;
+	oCaseEnterAbortAddress = 83;
+	oArrayEnterLowerBound = 84;
+	oArrayEnterUpperBound = 85;
+	oOptionTestChecking = 86; { >>14 }
+.

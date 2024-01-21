@@ -1,0 +1,5 @@
+#!/bin/sh
+handler () ( /bin/rm -f /tmp/ptc$! /tmp/ptc$!.* )
+trap "handler" 1 2 3 4 5 6 7 8 9 
+/usr/local/lib/pt/realptc -L /usr/local/lib/pt $* &
+wait

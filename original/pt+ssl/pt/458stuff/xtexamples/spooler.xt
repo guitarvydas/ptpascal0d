@@ -1,0 +1,83 @@
+program spooling (input, output);
+
+module spooler
+    type itemtype = string;
+
+    const qsize = 100;
+	qsizem1 = 99;
+
+    module queue;
+	var qend : 0 .. qsizem1 
+	var qstart : 0 .. qsizem1 
+	var qlength : 0 .. qsize 
+	var contents : array 0 .. qsizem1 of itemtype;
+
+	entry procedure enqueue (item : itemtype);
+	    begin
+		qlength := qlength + 1;
+		qend := (qend + 1) mod qsize;
+		contents (qend) := item
+	    end {enqueue};
+
+	entry procedure dequeue (var item : itemtype);
+	    begin
+		item := contents (qstart);
+		qstart := (qstart + 1) mod qsize;
+		qlength := qlength - 1
+	    end {dequeue};
+
+	entry procedure empty (var yes : boolean);
+	    begin
+		yes := qlength = 0
+	    end {empty};
+
+	begin
+	    qend := 0;
+	    qstart := 1;
+	    qlength := 0
+	end
+    end queue;
+
+    entry procedure getdata;
+	begin
+	    loop
+		read (s);
+		exit when s = ".";
+		enqueue (s)
+	    end loop
+	end {getdata};
+
+    entry procedure putdata;
+	var yes : boolean;
+	begin
+	    loop
+		empty (yes);
+		exit when yes;
+		dequeue (s);
+		write (s, " ")
+	    end loop;
+	    writeln
+	end {putdata};
+
+    begin
+    end
+end spooler;
+
+
+begin
+    write ("Type a few words followed by a . each time",
+	" you're asked to spool."); writeln;
+    writeln;
+    write ("When you get bored, type ^D to stop",
+	" spooling and watch the result."); writeln;
+
+    loop
+	write ("Spool input please : "); writeln;
+	getdata;
+	exit when eof (input)
+    end loop;
+
+    writeln;
+    write ("Unspooled from spool : ";
+    putdata
+end.

@@ -1,0 +1,2652 @@
+program SslProcessor (output, sslFile, inFile,
+                        outDefFile, outSslFile, listFile, optionFile);
+
+    {   Computer Systems Research Group
+        University of Toronto
+        File:   S/SL Processor (Standard Pascal) V1.12
+        Author: J.R. Cordy
+        Date:   14 January 1980  (Revised 22 April 1981) }
+
+    { Copyright (C) 1980  The University of Toronto }
+
+    {	V1.12 - Revised to add S/SL symbolic tracing capability
+	J.R. Cordy, Queen's University, 10 Jan 1990 }
+
+    {        This program is the processor for Syntax/Semantic
+      Langauge programs.  An S/SL program must be processed
+      by this program, which will output Standard Pascal
+      declarations for the constants defining the
+      input tokens, output tokens, error codes, type
+      values and semantic operation codes used in
+      the S/SL program and a file containing the values
+      of the S/SL table for the program.
+        The declarations must be merged into the constant
+      declarations for the S/SL Walker Skeleton.  The table
+      file is read into the sslTable array as part of
+      initialization of the walker.                                }
+
+    { Input files:
+        inFile -     the S/SL program source
+        sslFile -    the S/SL table file for the S/SL Processor
+        optionFile - S/SL Processor run options (see below)        }
+
+    { Output files:
+        outDefFile - the output constant definitions for the
+                     program
+        outSslFile - the output S/SL table file for the program
+        listFile -   a listing of the S/SL source program with
+                     table coordinates in the left margin
+                     (if requested)                                }
+
+    { The optionFile is a file of single character option flags.
+      The following are recognized options:
+        l - produce a listing of the S/SL source program with
+            table coordinates in the left margin in listFile
+        b - produce byte (0..255) rather than word tables
+        c - produce char (0..127) rather than word tables
+        t - trace S/SL processor execution                        }
+
+
+
+    const
+        { Primitive S/SL Table Operations:
+          These will remain the same independent of the
+          pass and form the fundamental table operations. }
+        firstTableOperation = 0;
+        firstPrimitiveOperation = 0;
+        oCall = 0;
+        oReturn = 1;
+        oRuleEnd = 2;
+        oJumpBack = 3;
+        oJumpForward = 4;
+        oInput = 5;
+        oInputAny = 6;
+        oInputChoice = 7;
+        oEmit = 8;
+        oError = 9;
+        oChoice = 10;
+        oChoiceEnd = 11;
+        oSetParameter = 12;
+        oSetResult = 13;
+        lastPrimitiveOperation = 13;
+
+        { Pass Dependent Semantic Operations:
+          These will be different for each pass.  The
+          semantic operations are implemented by the
+          Semantic Mechanisms of the pass.
+          There are two basic kinds of semantic operations:
+          Update operations, which cause an update to the
+          Semantic Mechanism, and Choice operations, which
+          return a value based on the state of the Semantic
+          Mechanism which is then used as the tag in a semantic
+          choice.  Both Update and Choice operations may be
+          parameterized by a single constant value.                }
+        firstSemanticOperation = 14;
+        oEnterCall = 14;
+        oEmitNullCallAddress = 15;
+        oResolveCalls = 16;
+        oSetClass = 17;
+        osSetClassFromSymbolClass = 18;
+        ouSetClassFromSymbolValue = 19;
+        ovSetClassFromSymbolResultClass = 20;
+        owSetClassFromSymbolParameterClass = 21;
+        oxSetClassFromChoiceClass = 22;
+        oChooseClass = 23;
+        oySetClassValue = 24;
+        ozSetClassValueFromSymbolValue = 25;
+        oIncrementClassValue = 26;
+        oEnterNewSymbol = 27;
+        oLookupSymbol = 28;
+        oChangeSymbolClass = 29;
+        oChooseSymbolClass = 30;
+        oVerifySymbolClass = 31;
+        oxEnterNewSymbolValue = 32;
+        oEnterSecondNewSymbolValue = 33;
+        oEnterSymbolValueFromAddress = 34;
+        oxChooseSymbolValue = 35;
+        oEmitSymbolValue = 36;
+        oxVerifySymbolClassValue = 37;
+        oxEnterSymbolParameterClass = 38;
+        oyEnterSymbolResultClass = 39;
+        oyChooseSymbolResultClass = 40;
+        oSaveEnclosingSymbol = 41;
+        oRestoreEnclosingSymbol = 42;
+        oSaveCurrentSymbol = 43;
+        owRestoreCurrentSymbol = 44;
+        oPushCycle = 45;
+        oPopCycle = 46;
+        owChooseCycleDepth = 47;
+        oEmitCycleAddress = 48;
+        oEnterCycleExit = 49;
+        owResolveCycleExits = 50;
+        ozChooseCycleExits = 51;
+        oPushChoice = 52;
+        oPopChoice = 53;
+        oChangeChoiceClass = 54;
+        osChooseChoiceClass = 55;
+        oVerifyChoiceSymbolLabel = 56;
+        oEnterChoiceSymbolLabel = 57;
+        oxEnterChoiceMerge = 58;
+        oxResolveChoiceMerges = 59;
+        oEmitChoiceTable = 60;
+        osResolveChoiceTableAddress = 61;
+        oEmitFirstChoiceValue = 62;
+        oxEmitFirstChoiceAddress = 63;
+        oGenerateDefinitions = 64;
+        owGenerateTable = 65;
+        oEmitValue = 66;
+        owEmitNullAddress = 67;
+        lastSemanticOperation = 67;
+        lastTableOperation = lastSemanticOperation;
+
+        { The S/SL Table Size and Table Value Range;
+          These definitions are generated by the S/SL Processor. }
+        sslTblSize = 1270;
+        minSslTableValue = -32767;
+        maxSslTableValue = 32767;
+
+        { The S/SL Rule Call Stack Size }
+        sslStkSize = 127;
+
+        { Operation Result Values }
+        valid = 1;
+        invalid = 0;
+
+        { Maximum Source Lines }
+        maxLineNumber = 9999;
+
+        { S/SL System Failure Codes }
+        firstFailureCode = 0;
+        fSemanticChoiceFailed = 0;
+        fChoiceRuleFailed = 1;
+        lastFailureCode = 1;
+
+        { Error Signal Codes }
+        firstErrorCode = 0;
+        eNoError = 0;
+        eSyntaxError = 1;
+        ePrematureEndOfFile = 2;
+        eExtraneousProgramText = 3;
+
+        { Semantic Errors }
+        eCycleHasNoExits = 10;
+        eDuplicateLabel = 11;
+        eExitNotInCycle = 12;
+        eBadParameterClass = 13;
+        eBadResultClass = 14;
+        eBadNonvaluedReturn = 15;
+        eBadStringSynonym = 16;
+        eBadValuedReturn = 17;
+        eSymbolPreviouslyDefined = 18;
+        eUndefinedSymbol = 19;
+        eWrongDeclaredResultClass = 20;
+        eWrongLabelClass = 21;
+        eWrongParameterClass = 22;
+        eWrongResultClass = 23;
+        eWrongSymbolClass = 24;
+
+        { Non-S/SL Semantic Errors }
+        eUnresolvedRule = 30;
+        eSymbolTooLong = 31;
+        eNumberTooLarge = 32;
+        eStringTooLong = 33;
+        eValueOutOfRange = 34;
+        eJumpOutOfRange = 35;
+
+        { Fatal Errors }
+        firstFatalErrorCode = 40;
+        eSslStackOverflow = 40;
+        eCallStackOverflow = 41;
+        eOvflTotalSymbolChars = 42;
+        eOvflSymbols = 43;
+        eTableTooLarge = 44;
+        eCyclesTooDeep = 45;
+        eOvflExits = 46;
+        eChoicesTooDeep = 47;
+        eOvflLabels = 48;
+        eOvflMerges = 49;
+        eOvflCalls = 50;
+        lastErrorCode = 50;
+
+        { Maximum Error Count }
+        maxErrors = 100;
+
+        { Input Tokens }
+        firstInputToken = -1;
+
+        { Nonexistent input token used only in syntax error recovery }
+        tSyntaxError = -1;
+
+        { Compound Input Tokens }
+        firstCompoundToken = 0;
+        tIdent = 0;
+        tString = 1;
+        tInteger = 2;
+        lastCompoundToken = 2;
+
+        { Non-Compound Input Tokens }
+        tColon = 3;
+        tSemicolon = 4;
+        tEqual = 5;
+        tQuestionMark = 6;
+        tPeriod = 7;
+        tErrorSignal = 8;
+        tCall = 9;
+        tExit = 10;
+        tReturn = 11;
+        tLeftParen = 12;
+        tRightParen = 13;
+        tCycle = 14;
+        tCycleEnd = 15;
+        tChoice = 16;
+        tChoiceEnd = 17;
+        tComma = 18;
+        tOr = 19;
+        tOtherwise = 20;
+        tInput = 21;
+        tOutput = 22;
+        tError = 23;
+        tType = 24;
+        tMechanism = 25;
+        tRules = 26;
+        tEnd = 27;
+        tNewLine = 28;
+        tEndOfFile = 29;
+
+        { Special token returned by Input Scanner for garbage }
+        tIllegal = 30;
+        lastInputToken = 30;
+
+        { Input Scanner Limits and Parameters }
+        maxInputTokenLength = 100;
+        maxIdentLength = maxInputTokenLength;
+        maxStringLength = maxIdentLength;
+        maxNumberLength = 5;
+        maxInteger = 32767;        { ***** Implementation dependent }
+        ordCharFirst = 0;
+        ordCharLast = 127;        { ***** 127 ASCII, 255 EBCDIC }
+
+        { Keyword Table Sizes }
+        noKeywords = 11;
+        noKeywdsPlus1 = 12;
+        noKeywdChars = 57;
+
+        { Character Constants }
+        tab = '	';        { ***** '<TAB>' ASCII, '<BLANK>' EBCDIC }
+        blank = ' ';
+        quote = '''';
+        breakChar = '_';
+
+        { Output Tokens; for the S/SL Processor,
+          these are the primitive operations of S/SL }
+        firstOutputToken = 0;
+        aCall = oCall;
+        aReturn = oReturn;
+        aRuleEnd = oRuleEnd;
+        aJumpBack = oJumpBack;
+        aJumpForward = oJumpForward;
+        aInput = oInput;
+        aInputAny = oInputAny;
+        aInputChoice = oInputChoice;
+        aEmit = oEmit;
+        aError = oError;
+        aChoice = oChoice;
+        aChoiceEnd = oChoiceEnd;
+        aSetParameter = oSetParameter;
+        aSetResult = oSetResult;
+        lastOutputToken = 13;
+
+        { Limits on the Assembled Output S/SL Table }
+        maxOutptTableSize = 10000;
+        nullAddress = -7777;
+        minByte = 0;
+        maxByte = 255;
+        minChar = -128;
+        maxChar = 127;
+
+        { Limits and Constants Associated with the
+          Semantic Mechanisms of the S/SL Processor }
+
+        { The Symbol Table }
+
+        { Classes of Symbols }
+        cNotFound = 0;
+        cInput = 1;
+        cOutput = 2;
+        cInputOutput = 3;
+        cError = 4;
+        cType = 5;
+        cMechanism = 6;
+        cUpdateOp = 7;
+        cParmUpdateOp = 8;
+        cChoiceOp = 9;
+        cParmChoiceOp = 10;
+        cRule = 11;
+        cChoiceRule = 12;
+        firstTypeClass = 13;
+        maxClasses = 80;
+
+        { Symbol Table Limits }
+        maxSymChars = 15000;        { Total length of all identifiers }
+        maxSymbols = 1000;
+
+        { Symbol index of nonexistent symbol }
+        notFound = 0;
+
+        { First values for classes }
+        firstUserErrorSignalValue = 10;
+        firstUsrSemanticOperationValue = 14;
+
+        { Undefined value }
+        undefined = -9999;
+
+        { The Call Table }
+        maxCalls = 800;
+
+        { The Cycle Stack }
+        maxExits = 30;         { Pending resolution }
+        maxCycles = 14;        { Deep }
+
+        { The Choice Stack }
+        maxMerges = 100;       { Pending resolution }
+        maxLabels = 80;        { Active }
+        maxChoices = 14;       { Deep }
+
+
+    type
+
+        { Input Token Type }
+        InputTokens = firstInputToken .. lastInputToken;
+        InputText = array [1 .. maxInputTokenLength] of char;
+
+        { Output Token Type }
+        OutputTokens = firstOutputToken .. lastOutputToken;
+
+        { Assembled S/SL Table Index }
+        OutputAddress = 0 .. maxOutptTableSize;
+
+        { Error Code Type }
+        ErrorCodes = firstErrorCode .. lastErrorCode;
+
+        { S/SL System Failure Code Type }
+        FailureCodes = firstFailureCode .. lastFailureCode;
+
+        { Types Used in the Semantic Mechanisms of the S/SL Processor }
+
+        { The Symbol Table }
+        SymbolClasses = cNotFound .. maxClasses;
+        SymbolIndex = 0 .. maxSymbols;
+
+
+    var
+        { Standard Characters }
+        newline:
+            char;
+        newpage:
+            char;
+        endfile:
+            char;
+
+        { The Syntax/Semantic Table;
+          The S/SL table file produced by the S/SL Processor
+          for the pass is read into this array during initialization. }
+        sslTable:
+            packed array [0 .. sslTblSize] of
+                minSslTableValue .. maxSslTableValue;
+        sslFile:
+            file of integer;
+
+        { Table Walker State }
+        processing:
+            Boolean  { initially true };
+        sslPointer:
+            0 .. sslTblSize  { initially 0 };
+        operation:
+            firstTableOperation .. lastTableOperation;
+
+        { Tracing and Listing Control }
+        optionFile:
+            file of char;
+        tracing:
+            Boolean  { initially false };
+        listing:
+            Boolean  { initially false };
+        listFile:
+            file of char;
+
+        { Abort Flag }
+        abort:
+            Boolean  { initially false };
+
+        { The S/SL Rule Call Stack:
+          The Rule Call Stack implements Syntax/Semantic
+          Language rule call and return.
+          Each time an oCall operation is executed,
+          the table return address is pushed onto the
+          Rule Call Stack.  When an oReturn is executed,
+          the return address is popped from the stack.
+          An oReturn executed when the Rule Call Stack is
+          empty terminates table execution.                }
+        sslStack:
+            array [1 .. sslStkSize] of 0 .. sslTblSize;
+        sslTop:
+            0 .. sslStkSize  { initially 0 };
+
+        { Choice Match Flag:
+          Set by the Choice Handler to indicate whether
+          a match was made or the otherwise path was taken.
+          Set to true if a match was made and false otherwise.
+          This flag is used in input choices to indicate
+          whether the choice input token should be accepted or
+          not.                                                        }
+        choiceTagMatched:
+            Boolean;
+
+        { Parameterized And Choice Semantic Operation Values:
+          These are used to hold the decoded parameter value to
+          a parameterized semantic operation and the result
+          value returned by a choice semantic operation
+          or rule respectively.                                         }
+        parameterValue:
+            integer;
+        resultValue:
+            integer;
+
+        { Line Counters }
+        nextLineNumber:
+            0 .. maxLineNumber        { initially 0 };
+        lineNumber:
+            0 .. maxLineNumber;
+
+        { Error Counter }
+        noErrors:
+            0 .. maxErrors  { initially 0 };
+
+        { Input Interface }
+        inFile:
+            file of char;
+        nextToken:
+            InputTokens;
+        nextTknValue:
+            integer;
+        nextTknText:
+            InputText;
+        nextTknLength:
+            0 .. maxInputTokenLength;
+
+        { The Compound Input Token Buffer;
+          When a compound input token is accepted from
+          the input stream, its associated value is
+          saved in the compound token buffer for use by
+          the Semantic Mechanisms of the pass.                }
+        compoundToken:
+            InputTokens;        { Last compound input token accepted }
+        compndValue:
+            integer;                { Its associated value }
+        compndText:
+            InputText;
+        compndLength:
+            0 .. maxInputTokenLength;
+
+        { Variables Used in Syntax Error Recovery }
+        newInputLine:
+            Boolean  { initially false };
+        savedToken:
+            InputTokens;
+
+        { Input Scanner Interface and Tables }
+
+        { Lookahead Character }
+        nextChar:
+            char;
+
+        { Letter Normalization Map }
+        lowerCase:
+            array [ordCharFirst .. ordCharLast] of char;
+
+        { Keyword Token Table }
+        keywordChars:
+            array [1..noKeywdChars] of char;
+        keywordLength:
+            array [1..noKeywdsPlus1] of 0..maxIdentLength;
+        keywordIndex:
+            array [1..noKeywords] of 1..noKeywdChars;
+        keywordToken:
+            array [1..noKeywords] of InputTokens;
+
+        { Special Symbol Token Table}
+        specialChar:
+            array [InputTokens] of char;
+
+        { First read flag }
+        firstChar:
+            Boolean;         { initially true }
+
+        { Output Interface }
+
+        { Generated Output Files }
+        outDefFile:
+            file of char;
+        outSslFile:
+            file of integer;
+
+        { The Assembled Table }
+        outputTable:
+            array [OutputAddress] of integer;
+        outputPointer:
+            OutputAddress;        { initially 0 }
+
+        { Limits on Assembled Table Values }
+        maxOutputValue:
+            integer;
+        minOutputValue:
+            integer;
+
+        { Global Temporaries }
+        i: integer;
+        j: integer;
+
+        { The Semantic Mechanism Data Structures of the S/SL Processor }
+
+        { The Symbol Table }
+
+        { Symbol Identifier Characters Storage }
+        symChars:
+            array [0 .. maxSymChars] of char;
+        symCharTop:
+            0 .. maxSymChars;        { initially 0 }
+
+        { The Symbol Table }
+        symClass:
+            array [0 .. maxSymbols] of SymbolClasses;
+        symCharIndex:
+            array [0 .. maxSymbols] of 0 .. maxSymChars;
+        symLength:
+            array [0 .. maxSymbols] of 1 .. maxIdentLength;
+        symValue:
+            array [0 .. maxSymbols] of integer;
+        symParmClass:
+            array [0 .. maxSymbols] of SymbolClasses;
+        symResultClass:
+            array [0 .. maxSymbols] of SymbolClasses;
+        symTop:
+            SymbolIndex;        { initially 0 }
+
+        { symIndex is the index in the Symbol Table
+          of the symbol last referenced;  symIndex = 0 (notFound)
+          indicates the referenced symbol is not present in the table. }
+        symIndex:
+            SymbolIndex;
+
+        { savedSymIndex is used to save the
+          the value of symIndex for later recall }
+        savedSymIndex:
+            SymbolIndex;
+
+        { enclosingSymIndex is used to save the symbol index of the
+          enclosing S/SL rule or type for later recall                        }
+        enclosingSymIndex:
+            SymbolIndex;
+
+        { Next Symbol Value }
+        symNextValue:
+            array [SymbolClasses] of integer;
+
+        { Current Definition Class }
+        symCurrentClass:
+            SymbolClasses;        { initially cNotFound }
+
+        { The Call Table }
+
+        callAddress:
+            array [1 .. maxCalls] of OutputAddress;
+        callRule:
+            array [1 .. maxCalls] of SymbolIndex;
+        callTop:
+            0 .. maxCalls;        { initially 0 }
+
+        { The Cycle Stack }
+
+        { The Cycle Exit Stack }
+        exitAddress:
+            array [1 .. maxExits] of OutputAddress;
+        exitTop:
+            0 .. maxExits;        { initially 0 }
+
+        { The Cycle Stack }
+        cycleAddress:
+            array [1 .. maxCycles] of OutputAddress;
+        { cycleExitIndex is the origin of the
+          portion of the Exit Stack for the cycle }
+        cycleExitIndex:
+            array [1 .. maxCycles] of 0 .. maxExits;
+        cycleTop:
+            0 .. maxCycles;        { initially 0 }
+
+        { The Choice Stack }
+
+        { The Choice Merge Stack:  used to save the addresses
+          of the merge branches following each alternative of a choice }
+        mergeAddress:
+            array [1 .. maxMerges] of OutputAddress;
+        mergeTop:
+            0 .. maxMerges;        { initially 0 }
+
+        { The Choice Label Stack:  used to save the alternative
+          values and corresponding table addresses in a choice }
+        labelValue:
+            array [1 .. maxLabels] of integer;
+        labelAddress:
+            array [1 .. maxLabels] of OutputAddress;
+        labelTop:
+            0 .. maxLabels;        { initially 0 }
+
+        { The Choice Stack }
+        choiceClass:
+            array [1 .. maxChoices] of SymbolClasses;
+        choiceAddress:
+            array [1 .. maxChoices] of OutputAddress;
+        { choiceMergeIndex is the origin of the portion
+          of the Merge Stack for the choice                }
+        choiceMergeIndex:
+            array [1 .. maxChoices] of 0 .. maxMerges;
+        { choiceLabelIndex is the origin of the portion
+          of the Label Stack for the choice                }
+        choiceLabelIndex:
+            array [1 .. maxChoices] of 0 .. maxLabels;
+        choiceTop:
+            0 .. maxChoices;        { initially 0 }
+
+	{ Kludgy UNIX Pascal file name access }
+	{ NsslFile, NinFile, NoutDefFile, NoutSslFile, NlistFile, NoptionFile:
+	    packed array [1 .. 50] of char; }
+
+
+
+
+
+    procedure SslAssert (assertion: Boolean; number: integer);
+        { Procedure to implement S/SL processor assertion checking
+          with identification numbers.                                    }
+        begin
+            if not assertion then
+                begin
+                    write ('### S/SL Processor assertion ',
+                        number: 1, ' failed');
+                    writeln;
+                    { Cause a crash }
+                    case 2 of 1: end;
+                end;
+        end { SslAssert };
+
+
+    procedure PutErrorToken (var text: InputText; length: integer);
+        var i: 0 .. maxInputTokenLength;
+        begin
+            write ('"');
+            i := 0;
+            repeat
+                i := i + 1;
+                write (text[i]);
+            until i = length;
+
+            write ('"');
+        end { PutErrorToken };
+
+
+    procedure Error (errCode: ErrorCodes);
+        { This procedure Emits the error message associated with errCode }
+        begin
+            SslAssert (errCode <> eNoError, 10);
+
+            if errCode = eSyntaxError then
+                { Syntax errors are in the lookahead token }
+                write ('Line ', nextLineNumber: 1, ': ')
+            else
+                { Semantic errors are in the accepted token }
+                write ('Line ', lineNumber: 1, ': ');
+
+            case errCode of
+                eSyntaxError:
+                    begin
+                        write ('Syntax error at ');
+                        PutErrorToken (nextTknText, nextTknLength);
+                    end;
+                ePrematureEndOfFile:
+                    write ('Unexpected end of file');
+                eExtraneousProgramText:
+                    write ('Extraneous program text');
+                eSymbolTooLong:
+                    write ('Symbol too long');
+                eNumberTooLarge:
+                    write ('Integer value too large (or small)');
+                eStringTooLong:
+                    write ('String too long');
+                eUndefinedSymbol:
+                    begin
+                        write ('Symbol ');
+                        PutErrorToken (compndText, compndLength);
+                        write (' undefined');
+                    end;
+                eSymbolPreviouslyDefined:
+                    begin
+                        write ('Symbol ');
+                        PutErrorToken (compndText, compndLength);
+                        write (' previously defined');
+                    end;
+                eWrongSymbolClass:
+                    begin
+                        write ('Illegal context for symbol ');
+                        PutErrorToken (compndText, compndLength);
+                    end;
+                eUnresolvedRule:
+                    begin
+                        write ('Rule ');
+                        PutErrorToken (compndText, compndLength);
+                        write (' undefined');
+                    end;
+                eValueOutOfRange:
+                    write ('Symbol value not in table value range');
+                eJumpOutOfRange:
+                    write ('Jump distance exceeds table value range');
+                eBadStringSynonym:
+                    write ('Illegal string synonym');
+                eOvflTotalSymbolChars:
+                    write ('Too many symbols (chars)');
+                eOvflSymbols:
+                    write ('Too many symbols');
+                eTableTooLarge:
+                    write ('Table too large');
+                eOvflCalls:
+                    write ('Too many rule calls');
+                eCyclesTooDeep:
+                    write ('Cycles too deep');
+                eChoicesTooDeep:
+                    write ('Choices too deep');
+                eOvflExits:
+                    write ('Too many cycle exits');
+                eOvflLabels, eOvflMerges:
+                    write ('Too many alternatives');
+                eCycleHasNoExits:
+                    write ('(Warning) Cycle does not contain ',
+                        'a cycle exit');
+                eExitNotInCycle:
+                    write ('Cycle exit not in cycle');
+                eDuplicateLabel:
+                    write ('Duplicate alternative label');
+                eBadParameterClass, eBadResultClass:
+                    write ('Type name required as parameter ',
+                        'or result type');
+                eBadNonvaluedReturn:
+                    write ('Non-valued return in choice rule');
+                eBadValuedReturn:
+                    write ('Valued return in procedure rule');
+                eWrongLabelClass:
+                    write ('Alternative label is wrong type');
+                eWrongParameterClass:
+                    write ('Parameter is wrong type');
+                eWrongDeclaredResultClass:
+                    write ('Result type does not match previous use');
+                eWrongResultClass:
+                    write ('Result value is wrong type');
+            end;
+            writeln;
+
+            noErrors := noErrors + 1;
+
+            if (errCode >= firstFatalErrorCode) or (noErrors = maxErrors) then
+                begin
+                    write ('*** Processing aborted');
+                    writeln;
+                    abort := true;
+                    processing := false;
+                end;
+        end { Error };
+
+
+    procedure ReadNextChar;
+        begin
+            if listing then
+                begin
+                    if firstChar then
+                        firstChar := false
+                    else if nextChar = newline then
+                        writeln (listFile)
+                    else
+                        write (listFile, nextChar);
+
+                    if nextChar = newline then
+                        write (listFile, outputPointer: 4, tab);
+                end;
+
+            if nextChar <> endfile then
+                if eof (inFile) then
+                    nextChar := endfile
+
+                else if eoln (inFile) then
+                    begin
+                        nextChar := newline;
+                        readln (inFile);
+                    end
+
+                else
+                    read (inFile, nextChar);
+        end { ReadNextChar };
+
+
+    procedure EvaluateNumber;
+        var i: 0 .. maxNumberLength;
+            value: integer;
+            increment: integer;
+        begin
+            SslAssert ((nextToken = tInteger) and (nextTknLength > 0) and
+                ((nextTknLength <= maxNumberLength) or
+                ((nextTknText[1] = '-') and
+                (nextTknLength <= maxNumberLength+1))), 20);
+
+            if nextTknText[1] = '-' then
+                i := 1
+            else
+                i := 0;
+
+            value := 0;
+
+            repeat
+                i := i + 1;
+
+                if value <= maxInteger div 10 then
+                    begin
+                        value := value * 10;
+                        increment := ord (nextTknText[i]) - ord ('0');
+
+                        if increment <= maxInteger - value then
+                            value := value + increment
+                        else
+                            begin
+                                Error (eNumberTooLarge);
+                                value := 0;
+                            end;
+                    end
+                else
+                    begin
+                        Error (eNumberTooLarge);
+                        value := 0;
+                    end;
+            until i = nextTknLength;
+
+            if nextTknText[1] = '-' then
+                value := -value;
+
+            nextTknValue := value;
+        end { EvaluateNumber };
+
+
+    procedure LookupKeyword;
+        var i: 1 .. noKeywdsPlus1;
+            j: 1 .. maxIdentLength;
+        begin
+            SslAssert ((nextToken = tIdent) and (nextTknLength > 0), 30);
+            { The keyword table is ordered by length, longest first }
+
+            if nextTknLength <= keywordLength[1] {the longest} then
+                begin
+                    i := 1;
+                    while keywordLength[i] > nextTknLength do
+                        i := i + 1;
+
+                    while (keywordLength[i] = nextTknLength) and
+                            (nextToken = tIdent) do
+                        begin
+                            j := 1;
+                            while (lowerCase [ord(keywordChars
+                                    [keywordIndex[i] + j - 1])] =
+                                    lowerCase [ord(nextTknText[j])]) and
+                                    (j <> keywordLength[i]) do
+                                j := j + 1;
+
+                            if lowerCase [ord(keywordChars
+                                    [keywordIndex[i] + j - 1])] =
+                                    lowerCase [ord(nextTknText[j])] then
+                                nextToken := keywordToken[i];
+
+                            i := i + 1;
+                        end;
+                end;
+        end { LookupKeyword };
+
+
+    procedure GetNextInputToken;
+        var errCode: ErrorCodes;
+            t: firstInputToken .. lastInputToken;
+        begin
+            SslAssert ((maxInputTokenLength >= maxIdentLength) and
+                (maxInputTokenLength >= maxStringLength) and
+                (maxInputTokenLength >= maxNumberLength), 40);
+            errCode := eNoError;
+
+            { Skip blanks and comments }
+            while (nextChar = blank) or (nextChar = tab) or
+                    (nextChar = newpage) or (nextChar = '%') do
+                begin
+                    if nextChar = '%' then
+                        { Skip comment }
+                        repeat
+                            ReadNextChar;
+                        until (nextChar = newline) or (nextChar = endfile)
+                    else
+                        ReadNextChar;
+                end;
+
+            { Scan and set nextToken }
+            nextTknLength := 0;
+
+            if ((nextChar >= 'a') and (nextChar <= 'z')) or
+                    ((nextChar >= 'A') and (nextChar <= 'Z')) then
+                begin
+                    { Scan identifier }
+                    repeat
+                        if nextTknLength < maxIdentLength then
+                            begin
+                                nextTknLength := nextTknLength + 1;
+                                nextTknText[nextTknLength] := nextChar;
+                            end
+                        else
+                            errCode := eSymbolTooLong;
+                        ReadNextChar;
+                    until not (((nextChar >= 'a') and (nextChar <= 'z')) or
+                            ((nextChar >= 'A') and (nextChar <= 'Z')) or
+                            ((nextChar >= '0') and (nextChar <= '9')) or
+                            (nextChar = breakChar));
+                    nextToken := tIdent;
+
+                    { Test for Keyword }
+                    LookupKeyword;
+                end
+
+            else if (nextChar = '-') or
+                    ((nextChar >= '0') and (nextChar <= '9')) then
+                begin
+                    { Scan number }
+                    if nextChar = '-' then
+                        begin
+                            nextTknLength := nextTknLength + 1;
+                            nextTknText[nextTknLength] := nextChar;
+                            ReadNextChar;
+                        end;
+
+                    SslAssert (maxInputTokenLength > maxNumberLength+1, 50);
+                    repeat
+                        if nextTknLength < maxNumberLength+2 then
+                            begin
+                                nextTknLength := nextTknLength + 1;
+                                nextTknText[nextTknLength] := nextChar;
+                            end;
+                        ReadNextChar;
+                    until (nextChar < '0') or (nextChar > '9');
+
+                    nextToken := tInteger;
+
+                    if (nextTknLength > maxNumberLength+1) or
+                            ((nextTknText[1] <> '-' ) and
+                            (nextTknLength > maxNumberLength)) then
+                        begin
+                            errCode := eNumberTooLarge;
+                            nextTknValue := 0;
+                        end
+                    else
+                        EvaluateNumber;
+                end
+
+            else if nextChar = quote then
+                begin
+                    { Scan String }
+                    repeat
+                        if nextTknLength < maxStringLength-1 then
+                            begin
+                                nextTknLength := nextTknLength + 1;
+                                nextTknText[nextTknLength] := nextChar;
+                            end
+                        else
+                            errCode := eStringTooLong;
+
+                        ReadNextChar;
+                    until (nextChar = quote) or (nextChar = newline) or
+                        (nextChar = endfile);
+
+                    nextTknLength := nextTknLength + 1;
+                    nextTknText[nextTknLength] := quote;
+
+                    if nextChar = quote then
+                        ReadNextChar;
+
+                    nextToken := tString;
+                end
+
+            else
+                begin
+                    { Special Symbols }
+                    SslAssert (lastInputToken = tIllegal, 60);
+                    t := firstInputToken;
+                    while (specialChar[t] <> nextChar) and
+                            (t <> lastInputToken) do
+                        t := t + 1;
+
+                    nextToken := t;
+                    nextTknLength := 1;
+                    nextTknText[1] := nextChar;
+                    ReadNextChar;
+
+                    if (nextToken = tExit) and (nextChar = '>') then
+                        begin
+                            nextToken := tReturn;
+                            ReadNextChar;
+                        end
+                    else if (nextToken = tIllegal) and
+                            (nextTknText[1] = '!') then
+                        { Alternate for tOr }
+                        nextToken := tOr;
+                end;
+
+            if errCode <> eNoError then
+                Error (errCode);
+        end { GetNextInputToken };
+
+
+    procedure InitInputScanner;
+        var c: ordCharFirst .. ordCharLast;
+            t: firstInputToken .. lastInputToken;
+            i: integer;
+            k: integer;
+        begin
+            { Initialize Letter Normalization Map }
+            { The following works for both ASCII and EBCDIC }
+            c := ordCharFirst;
+            lowerCase[c] := chr(c);
+            repeat
+                c := c + 1;
+                lowerCase[c] := chr(c);
+            until c = ordCharLast;
+
+            c := ord('A');
+            i := ord('a') - ord('A');
+            lowerCase[c] := chr(c+i);
+            repeat
+                c := c + 1;
+                lowerCase [c] := chr(c+i);
+            until c = ord('Z');
+
+            { Initialize Keyword Table }
+            keywordChars[1] := 'm';
+            keywordChars[2] := 'e';
+            keywordChars[3] := 'c';
+            keywordChars[4] := 'h';
+            keywordChars[5] := 'a';
+            keywordChars[6] := 'n';
+            keywordChars[7] := 'i';
+            keywordChars[8] := 's';
+            keywordChars[9] := 'm';
+            keywordChars[10] := '.';
+            keywordChars[11] := 'o';
+            keywordChars[12] := 'u';
+            keywordChars[13] := 't';
+            keywordChars[14] := 'p';
+            keywordChars[15] := 'u';
+            keywordChars[16] := 't';
+            keywordChars[17] := '.';
+            keywordChars[18] := 'i';
+            keywordChars[19] := 'n';
+            keywordChars[20] := 'p';
+            keywordChars[21] := 'u';
+            keywordChars[22] := 't';
+            keywordChars[23] := '.';
+            keywordChars[24] := 'e';
+            keywordChars[25] := 'r';
+            keywordChars[26] := 'r';
+            keywordChars[27] := 'o';
+            keywordChars[28] := 'r';
+            keywordChars[29] := '.';
+            keywordChars[30] := 'r';
+            keywordChars[31] := 'u';
+            keywordChars[32] := 'l';
+            keywordChars[33] := 'e';
+            keywordChars[34] := 's';
+            keywordChars[35] := '.';
+            keywordChars[36] := 't';
+            keywordChars[37] := 'y';
+            keywordChars[38] := 'p';
+            keywordChars[39] := 'e';
+            keywordChars[40] := '.';
+            keywordChars[41] := 'e';
+            keywordChars[42] := 'n';
+            keywordChars[43] := 'd';
+            keywordChars[44] := '.';
+            keywordChars[45] := 'd';
+            keywordChars[46] := 'o';
+            keywordChars[47] := '.';
+            keywordChars[48] := 'o';
+            keywordChars[49] := 'd';
+            keywordChars[50] := '.';
+            keywordChars[51] := 'i';
+            keywordChars[52] := 'f';
+            keywordChars[53] := '.';
+            keywordChars[54] := 'f';
+            keywordChars[55] := 'i';
+            keywordChars[56] := '.';
+            keywordChars[57] := '.';
+
+            i := 1;
+            k := 1;
+            repeat
+                keywordIndex[i] := k;
+                repeat
+                    k := k + 1;
+                until keywordChars[k] = '.';
+
+                keywordLength[i] := k - keywordIndex[i];
+                k := k + 1;
+                i := i + 1;
+            until keywordChars[k] = '.';
+
+            SslAssert ((i = noKeywords+1) and (k = noKeywdChars), 70);
+            keywordLength[noKeywords+1] := 0;
+
+            keywordToken[1] := tMechanism;
+            keywordToken[2] := tOutput;
+            keywordToken[3] := tInput;
+            keywordToken[4] := tError;
+            keywordToken[5] := tRules;
+            keywordToken[6] := tType;
+            keywordToken[7] := tEnd;
+            keywordToken[8] := tCycle;
+            keywordToken[9] := tCycleEnd;
+            keywordToken[10] := tChoice;
+            keywordToken[11] := tChoiceEnd;
+
+            { Initialize Special Character Table }
+            t := firstInputToken;
+            specialChar[t] := blank;
+            repeat
+                t := t + 1;
+                specialChar[t] := blank;
+            until t = lastInputToken;
+
+            specialChar[tColon] := ':';
+            specialChar[tSemicolon] := ';';
+            specialChar[tEqual] := '=';
+            specialChar[tQuestionMark] := '?';
+            specialChar[tPeriod] := '.';
+            specialChar[tErrorSignal] := '#';
+            specialChar[tCall] := '@';
+            specialChar[tExit] := '>';
+            specialChar[tReturn] := blank;        { tReturn handled specially }
+            specialChar[tLeftParen] := '(';
+            specialChar[tRightParen] := ')';
+            specialChar[tCycle] := '{';
+            specialChar[tCycleEnd] := '}';
+            specialChar[tChoice] := '[';
+            specialChar[tChoiceEnd] := ']';
+            specialChar[tComma] := ',';
+            specialChar[tOr] := '|';        { alternate '!' handled specially }
+            specialChar[tOtherwise] := '*';
+            specialChar[tNewLine] := newline;
+            specialChar[tEndOfFile] := endfile;
+            specialChar[tIllegal] := blank;        { tIllegal handled specially }
+
+            { Initialize Lookahead }
+            nextChar := newline;
+            firstChar := true;
+
+            { Initialize Input/Output }
+            reset (inFile {, NinFile} );
+
+            if listing then
+                rewrite (listFile {, NlistFile} );
+        end { InitInputScanner };
+
+
+    procedure AcceptInputToken;
+        var acceptedToken: InputTokens;
+            i: 0 .. maxInputTokenLength;
+        begin
+            SslAssert (nextToken <> tEndOfFile, 120);
+
+            { Accept Token }
+            acceptedToken := nextToken;
+
+            if (acceptedToken = tIdent) or (acceptedToken = tString) or
+                    (acceptedToken = tInteger) then
+                begin
+                    compoundToken := acceptedToken;
+                    compndLength := nextTknLength;
+
+                    i := 0;
+                    SslAssert (compndLength > 0, 130);
+                    repeat
+                        i := i + 1;
+                        compndText[i] := nextTknText[i];
+                    until i = compndLength;
+
+                    compndValue := nextTknValue;
+                end;
+
+            { Update Line Number }
+            lineNumber := nextLineNumber;
+
+            { Get Next Input Token }
+            newInputLine := false;
+            repeat
+                GetNextInputToken;
+
+                if nextToken = tNewLine then
+                    begin
+                        { Update Line Counter and Set Flag }
+                        newInputLine := true;
+
+                        if nextLineNumber < maxLineNumber then
+                            nextLineNumber := nextLineNumber + 1
+                        else
+                            nextLineNumber := 0;
+                    end;
+            until nextToken <> tNewLine;
+
+            { Trace input }
+            if tracing then
+                begin
+                    write ('Input token accepted ', acceptedToken: 1,
+                        ';  Line', lineNumber, ';  Next input token ',
+                        nextToken: 1);
+                    writeln;
+                end;
+        end { AcceptInputToken };
+
+
+    procedure Emit (value: integer);
+        { Emit an output table element to the assembled table }
+        begin
+            if outputPointer < maxOutptTableSize then
+                begin
+                    outputTable[outputPointer] := value;
+                    outputPointer := outputPointer + 1;
+
+                    { Trace Table Assembly }
+                    if tracing then
+                        begin
+                            write ('Output emitted at ', outputPointer-1: 1,
+                                ': ', value: 1);
+                            writeln;
+                        end;
+                end
+            else
+                Error (eTableTooLarge);
+        end { Emit };
+
+
+    procedure EmitFixup (address: OutputAddress; value: integer);
+        { Fixup a previously emitted table location to a resolved value }
+        begin
+            SslAssert (outputTable[address] = nullAddress, 140);
+            outputTable[address] := value;
+
+            { Trace Table Assembly }
+            if tracing then
+                begin
+                    write ('Output fixup at ', address: 1, ': ', value: 1);
+                    writeln;
+                end;
+        end { EmitFixup };
+
+
+    procedure EmitNullAddress;
+        { Reserve a table location to be fixed up }
+        begin
+            Emit (nullAddress);
+        end { EmitNullAddress };
+
+
+    procedure EmitJumpAddress (targetAddress: OutputAddress);
+        { Emit a backward jump address.  Jump addresses are relative to
+          the table address of the address field of the jump.                }
+        var relativeAddress: integer;
+        begin
+            relativeAddress := outputPointer - targetAddress;
+            SslAssert (relativeAddress > 0, 160);
+
+            if relativeAddress > maxOutputValue then
+                Error (eJumpOutOfRange);
+
+            Emit (relativeAddress);
+        end { EmitJumpAddress };
+
+
+    procedure EmitJmpFixup (address: OutputAddress);
+        { Fixup a forward jump address.  Jump addresses are relative to
+          the table address of the address field of the jump.                }
+        var relativeAddress: integer;
+        begin
+            relativeAddress := outputPointer - address;
+            SslAssert (relativeAddress > 0, 170);
+
+            if relativeAddress > maxOutputValue then
+                Error (eJumpOutOfRange);
+
+            EmitFixup (address, relativeAddress);
+        end { EmitJmpFixup };
+
+
+    procedure EmitNulCallAddress;
+        begin
+            EmitNullAddress;
+
+            if maxOutputValue < maxOutptTableSize then
+                { Two table elements are needed to represent call addresses }
+                EmitNullAddress;
+        end { EmitNulCallAddress };
+
+
+    procedure EmitCallFixup (address: OutputAddress; ruleAddress: OutputAddress);
+        { Fixup a rule call address.  Rule addresses are always absolute
+          table coordinates.  They can be represented using either one or
+          two table elements depending on the value of maxOutputValue.        }
+        begin
+            if maxOutputValue >= maxOutptTableSize then
+                { One table element will do for calls }
+                EmitFixup (address, ruleAddress)
+            else
+                { Two table elements are necessary to represent calls }
+                begin
+                    SslAssert (maxOutputValue < maxInteger, 180);
+                    SslAssert (maxOutptTableSize div (maxOutputValue+1)
+                        <= maxOutputValue, 181);
+                    EmitFixup (address-1, ruleAddress div (maxOutputValue+1));
+                    EmitFixup (address, ruleAddress mod (maxOutputValue+1));
+                end;
+        end { EmitCallFixup };
+
+
+    { The Symbol Table Mechanism }
+
+    { The Symbol Table is used to keep track of defined symbols
+      in the S/SL program.  It provides facilities to save defined
+      symbols, resolve referenced symbols, and keep track of symbol
+      values and parameter and result types.                                }
+
+
+    procedure EnterNewSymbol;
+        var i: integer;
+        begin
+            SslAssert (((compoundToken = tIdent) or (compoundToken = tString))
+                and (compndLength > 0), 190);
+
+            { Enter in the Symbol Table }
+            if symTop < maxSymbols then
+                begin
+                    symTop := symTop + 1;
+
+                    if symCharTop + compndLength < maxSymChars then
+                        begin
+                            { Enter symbol chars in symbol chars table }
+                            symCharIndex[symTop] := symCharTop + 1;
+                            i := 1;
+                            repeat
+                                symCharTop := symCharTop + 1;
+                                symChars[symCharTop] := compndText[i];
+                                i := i + 1;
+                            until i > compndLength;
+
+                            symLength[symTop] := compndLength;
+                            symClass[symTop] := symCurrentClass;
+                            symValue[symTop] := undefined;
+                            symParmClass[symTop] := cNotFound;
+                            symResultClass[symTop] := cNotFound;
+                        end
+                    else
+                        Error (eOvflTotalSymbolChars);
+                end
+            else
+                Error (eOvflSymbols);
+
+            symIndex := symTop;
+        end { EnterNewSymbol };
+
+
+    procedure LookupSymbol;
+        { This procedure looks up a symbol (or string) in the symbolTable }
+        var i: 1 .. maxIdentLength;
+            j: 0 .. maxSymChars;
+            s: SymbolIndex;
+        begin
+            SslAssert (((compoundToken = tIdent) or (compoundToken = tString))
+                and (compndLength > 0), 200);
+            symIndex := notFound;
+            s := symTop;
+
+            while s <> notFound do
+                begin
+                    if symLength[s] = compndLength then
+                        begin
+                            i := 1;
+                            j := symCharIndex[s];
+                            while (lowerCase [ord(symChars[j+i-1])] =
+                                    lowerCase [ord(compndText[i])]) and
+                                    (i <> compndLength) do
+                                i := i + 1;
+
+                            if lowerCase [ord(symChars[j+i-1])]
+                                    = lowerCase [ord(compndText[i])] then
+                                begin
+                                    symIndex := s;
+                                    s := notFound + 1;
+                                end;
+                        end;
+
+                    s := s - 1;
+                end;
+
+            { symIndex is now the index in the Symbol Table of the 
+              entry for the symbol if present and notFound otherwise }
+        end { LookupSymbol };
+
+
+    procedure xEnterNewSymbolValue;
+        begin
+            SslAssert (symTop > 0, 210);
+
+            if (symNextValue[symCurrentClass] < minOutputValue)
+                    or (symNextValue[symCurrentClass] > maxOutputValue) then
+                Error (eValueOutOfRange);
+
+            symValue[symTop] := symNextValue[symCurrentClass];
+        end { xEnterNewSymbolValue };
+
+
+    procedure EnterSecondNewSymbolValue;
+        begin
+            SslAssert (symTop >= 2, 220);
+
+            if (symNextValue[symCurrentClass] < minOutputValue)
+                    or (symNextValue[symCurrentClass] > maxOutputValue) then
+                Error (eValueOutOfRange);
+
+            symValue[symTop-1] := symNextValue[symCurrentClass];
+        end { EnterSecondNewSymbolValue };
+
+
+    procedure EnterSymbolValueFromAddress;
+        begin
+            symValue[symIndex] := outputPointer;
+        end { EnterSymbolValueFromAddress };
+
+
+    procedure xSymbolClass (var result: SymbolClasses);
+        begin
+            result := symClass[symIndex];
+        end { xSymbolClass };
+
+
+    procedure SymbolValue (var result: integer);
+        begin
+            result := symValue[symIndex];
+        end { SymbolValue };
+
+
+    procedure CurrentSymbolIndex (var result: SymbolIndex);
+        begin
+            result := symIndex;
+        end { CurrentSymbolIndex };
+
+
+    procedure SetCurrentSymbol (newIndex: SymbolIndex);
+        begin
+            symIndex := newIndex;
+        end { SetCurrentSymbol };
+
+
+    procedure xSetCurrentClass (newClass: SymbolClasses);
+        var nextOpValue: integer;
+        begin
+            { Synchronize operation values }
+            if (symCurrentClass = cUpdateOp) or
+                    (symCurrentClass = cParmUpdateOp) or
+                    (symCurrentClass = cChoiceOp) or
+                    (symCurrentClass = cParmChoiceOp) then
+                begin
+                    nextOpValue := symNextValue[symCurrentClass];
+                    symNextValue[cUpdateOp] := nextOpValue;
+                    symNextValue[cParmUpdateOp] := nextOpValue;
+                    symNextValue[cChoiceOp] := nextOpValue;
+                    symNextValue[cParmChoiceOp] := nextOpValue;
+                end;
+
+            { Synchronize input/output token values }
+            if ((symCurrentClass = cInput) or (symCurrentClass = cOutput)) and
+                    (symNextValue[symCurrentClass] >
+                    symNextValue[cInputOutput]) then
+                symNextValue[cInputOutput] := symNextValue[symCurrentClass];
+
+            symCurrentClass := newClass;
+        end { xSetCurrentClass };
+
+
+    procedure CurrentClass (var result: SymbolClasses);
+        begin
+            result := symCurrentClass;
+        end { CurrentClass };
+
+
+    procedure SetNextValueOfCurrentClass (newValue: integer);
+        begin
+            symNextValue[symCurrentClass] := newValue;
+        end { SetNextValueOfCurrentClass };
+
+
+    procedure IncrementCurrentClassValue;
+        begin
+            symNextValue[symCurrentClass] := symNextValue[symCurrentClass] + 1;
+        end { IncrementCurrentClassValue };
+
+
+    procedure CopySymbolTextToTokenBuffer;
+        var i: 0 .. maxInputTokenLength;
+            j: -1 .. maxSymChars;
+        begin
+            i := 0;
+            j := symCharIndex[symIndex] - 1;
+            compndLength := symLength[symIndex];
+            SslAssert (compndLength > 0, 230);
+
+            repeat
+                i := i + 1;
+                j := j + 1;
+                compndText[i] := symChars[j];
+            until i = compndLength;
+
+        end { CopySymbolTextToTokenBuffer };
+
+
+    procedure ChangeSymbolClass;
+        begin
+            SslAssert (symIndex <> notFound, 240);
+            symClass[symIndex] := symCurrentClass;
+        end { ChangeSymbolClass };
+
+
+    procedure xEnterSymbolParameterClass;
+        begin
+            SslAssert (symIndex <> notFound, 250);
+            symParmClass[symIndex] := symCurrentClass;
+        end { xEnterSymbolParameterClass };
+
+
+    procedure yEnterSymbolResultClass;
+        begin
+            SslAssert (symIndex <> notFound, 260);
+            symResultClass[symIndex] := symCurrentClass;
+        end { yEnterSymbolResultClass };
+
+
+    procedure SymbolParameterClass (var result: SymbolClasses);
+        begin
+            SslAssert (symIndex <> notFound, 270);
+            result := symParmClass[symIndex];
+        end { SymbolParameterClass };
+
+
+    procedure SymbolResultClass (var result: SymbolClasses);
+        begin
+            SslAssert (symIndex <> notFound, 280);
+            result := symResultClass[symIndex];
+        end { SymbolResultClass };
+
+
+    procedure SaveCurrentSymbol;
+        begin
+            savedSymIndex := symIndex;
+        end { SaveCurrentSymbol };
+
+
+    procedure RestoreCurrentSymbol;
+        begin
+            symIndex := savedSymIndex;
+        end { RestoreCurrentSymbol };
+
+
+    procedure SaveEnclosingSymbol;
+        begin
+            enclosingSymIndex := symIndex;
+        end { SaveEnclosingSymbol };
+
+
+    procedure RestoreEnclosingSymbol;
+        begin
+            symIndex := enclosingSymIndex;
+        end { RestoreEnclosingSymbol };
+
+
+    procedure InitSymbolTable;
+        var i: SymbolClasses;
+        begin
+            { Initialize Symbol Table }
+            symCurrentClass := cNotFound;
+            SslAssert (notFound = 0, 300);
+            symTop := notFound;
+            symClass[notFound] := cNotFound;
+            symCharIndex[notFound] := 0;
+            symLength[notFound] := 1;
+            symValue[notFound] := undefined;
+            symCharTop := 0;
+            symChars[0] := '?';
+
+            { Initialize Next Values }
+            symNextValue[cNotFound] := undefined;
+            i := cNotFound;
+            repeat
+                i := i + 1;
+                symNextValue[i] := 0;
+            until i = maxClasses;
+
+            symNextValue[cError] := firstUserErrorSignalValue;
+            symNextValue[cUpdateOp] := firstUsrSemanticOperationValue;
+            symNextValue[cParmUpdateOp] := firstUsrSemanticOperationValue;
+            symNextValue[cChoiceOp] := firstUsrSemanticOperationValue;
+            symNextValue[cParmChoiceOp] := firstUsrSemanticOperationValue;
+            symNextValue[cType] := firstTypeClass;
+        end { InitSymbolTable };
+
+
+    { The Call Table Mechanism }
+
+    { The Call Table is used to keep track of calls to rules
+      and provides operations to resolve the call addresses. }
+
+
+    procedure EnterCall;
+        begin
+            if callTop < maxCalls then
+                begin
+                    callTop := callTop + 1;
+                    callAddress[callTop] := outputPointer - 1;
+                    CurrentSymbolIndex (callRule[callTop]);
+                end
+            else
+                Error (eOvflCalls);
+        end { EnterCall };
+
+
+    procedure ResolveCalls;
+        var i: 0 .. maxCalls;
+            v: integer;
+        begin
+            i := 0;
+            while (i <> callTop) do
+                begin
+                    i := i + 1;
+                    SetCurrentSymbol (callRule[i]);
+                    SymbolValue (v);
+
+                    if v <> undefined then
+                        EmitCallFixup (callAddress[i], v)
+                    else
+                        begin
+                            CopySymbolTextToTokenBuffer;
+                            Error (eUnresolvedRule);
+                        end;
+                end;
+        end { ResolveCalls };
+
+
+    procedure InitCallTable;
+        begin
+            callTop := 0;
+        end { InitCallTable };
+
+
+    { The Cycle Stack Mechanism }
+
+    { The Cycle Stack is used to handle the exits and repeat
+      jump of the cycle construct.                                }
+
+
+    procedure PushCycle;
+        { This procedure processes the beginning of a cycle }
+        begin
+            if cycleTop < maxCycles then
+                begin
+                    cycleTop := cycleTop + 1;
+                    cycleExitIndex[cycleTop] := exitTop;
+                    cycleAddress[cycleTop] := outputPointer;
+                end
+            else
+                Error (eCyclesTooDeep);
+
+            SslAssert (cycleTop > 0, 310);
+        end { PushCycle };
+
+
+    procedure EnterCycleExit;
+        { This procedure processes cycle exits }
+        begin
+            SslAssert (cycleTop > 0, 320);
+
+            if exitTop < maxExits then
+                begin
+                    exitTop := exitTop + 1;
+                    exitAddress[exitTop] := outputPointer - 1;
+                end
+            else
+                Error (eOvflExits);
+
+            SslAssert (exitTop > 0, 330);
+        end { EnterCycleExit };
+
+
+    procedure ResolvCycleExits;
+        var i: 0 .. maxExits;
+        begin
+            SslAssert (cycleTop > 0, 340);
+
+            { Fixup cycle exits }
+            i := exitTop;
+            while i <> cycleExitIndex[cycleTop] do
+                begin
+                    EmitJmpFixup (exitAddress[i]);
+                    i := i - 1;
+                end;
+        end { ResolvCycleExits };
+
+
+    procedure PopCycle;
+        begin
+            SslAssert (cycleTop > 0, 350);
+            exitTop := cycleExitIndex[cycleTop];
+            cycleTop := cycleTop - 1;
+        end { PopCycle };
+
+
+    procedure EmitCycleAddress;
+        begin
+            EmitJumpAddress (cycleAddress[cycleTop]);
+        end { EmitCycleAddress };
+
+
+    procedure CycleDepth (var result: integer);
+        begin
+            result := cycleTop;
+        end { CycleDepth };
+
+
+    procedure CyclExits (var result: integer);
+        begin
+            SslAssert (cycleTop > 0, 360);
+            result := exitTop - cycleExitIndex[cycleTop];
+        end { CyclExits };
+
+
+    procedure InitCycleStack;
+        begin
+            exitTop := 0;
+            cycleTop := 0;
+        end { InitCycleStack };
+
+
+    { The Choice Stack Mechanism }
+
+    { The Choice Stack is used to handle the labels, merge branches,
+      and choice table of the choice construct.                                }
+
+
+    procedure PushChoice (pushClass: SymbolClasses);
+        { This procedure processes the beginning of a choice }
+        begin
+            if choiceTop < maxChoices then
+                begin
+                    choiceTop := choiceTop + 1;
+                    choiceClass[choiceTop] := pushClass;
+                    choiceAddress[choiceTop] := outputPointer - 1;
+                    choiceMergeIndex[choiceTop] := mergeTop;
+                    choiceLabelIndex[choiceTop] := labelTop;
+                end
+            else
+                Error (eChoicesTooDeep);
+
+            SslAssert (choiceTop > 0, 370);
+        end { PushChoice };
+
+
+    procedure EnterChoiceMerge;
+        begin
+            SslAssert (choiceTop > 0, 380);
+
+            if mergeTop < maxMerges then
+                begin
+                    mergeTop := mergeTop + 1;
+                    mergeAddress[mergeTop] := outputPointer - 1;
+                end
+            else
+                Error (eOvflMerges);
+
+            SslAssert (mergeTop > 0, 390);
+        end { EnterChoiceMerge };
+
+
+    procedure ResolvChoiceMerges;
+        { Resolve the merge jumps for the current top choice }
+        var i: 0 .. maxMerges;
+        begin
+            SslAssert ((choiceTop > 0) and (mergeTop > 0), 400);
+
+            { Fix choice merges }
+            i := mergeTop;
+            while i <> choiceMergeIndex[choiceTop] do
+                begin
+                    EmitJmpFixup (mergeAddress[i]);
+                    i := i - 1;
+                end;
+        end { ResolvChoiceMerges };
+
+
+    procedure xEnterChoiceLabel (value: integer);
+        begin
+            SslAssert (choiceTop > 0, 410);
+
+            if labelTop < maxLabels then
+                begin
+                    labelTop := labelTop + 1;
+                    labelValue[labelTop] := value;
+                    labelAddress[labelTop] := outputPointer;
+                end
+            else
+                Error (eOvflLabels);
+        end { xEnterChoiceLabel };
+
+
+    procedure VerifyChoiceLabel (var result: integer; value: integer);
+        var i: 0 .. maxLabels;
+        begin
+            SslAssert (choiceTop > 0, 440);
+            result := valid;
+
+            i := choiceLabelIndex[choiceTop];
+            while i <> labelTop do
+                begin
+                    i := i + 1;
+
+                    if labelValue[i] = value then
+                        { Duplicate label }
+                        result := invalid;
+                end;
+        end { VerifyChoiceLabel };
+
+
+    procedure PopChoice;
+        begin
+            SslAssert (choiceTop > 0, 420);
+            mergeTop := choiceMergeIndex[choiceTop];
+            labelTop := choiceLabelIndex[choiceTop];
+            choiceTop := choiceTop - 1;
+        end { PopChoice };
+
+
+    procedure xResolveChoiceTableAddress;
+        begin
+            SslAssert (choiceTop > 0, 430);
+            EmitJmpFixup (choiceAddress[choiceTop]);
+        end { xResolveChoiceTableAddress };
+
+
+    procedure EmitChoiceTable;
+        var i: 0 .. maxLabels;
+        begin
+            SslAssert (choiceTop > 0, 440);
+
+            { Emit choice table }
+            Emit (labelTop - choiceLabelIndex[choiceTop]); { Number of entries }
+            i := choiceLabelIndex[choiceTop];
+            while i <> labelTop do
+                begin
+                    i := i + 1;
+                    Emit (labelValue[i]);
+                    EmitJumpAddress (labelAddress[i]);
+                end;
+        end { EmitChoiceTable };
+
+
+    procedure EmitFirstChoiceAddress;
+        begin
+            SslAssert (choiceTop > 0, 450);
+            EmitJumpAddress (labelAddress[choiceLabelIndex[choiceTop] + 1]);
+        end { EmitFirstChoiceAddress };
+
+
+    procedure xEmitFirstChoiceValue;
+        begin
+            SslAssert (choiceTop > 0, 460);
+            Emit (labelValue[choiceLabelIndex[choiceTop] + 1]);
+        end { xEmitFirstChoiceValue };
+
+
+    procedure ClassOfChoice (var result: SymbolClasses);
+        begin
+            SslAssert (choiceTop > 0, 470);
+            result := choiceClass[choiceTop];
+        end { ClassOfChoice };
+
+
+    procedure ChangeChoiceClass (newClass: SymbolClasses);
+        begin
+            SslAssert (choiceTop > 0, 480);
+            choiceClass[choiceTop] := newClass;
+        end { ChangeChoiceClass };
+
+
+    procedure InitChoiceStack;
+        begin
+            mergeTop := 0;
+            labelTop := 0;
+            choiceTop := 0;
+        end { InitChoiceStack };
+
+
+    { The Output Definition and S/SL Table Generators }
+
+
+    procedure GenerateClass (class: SymbolClasses);
+        { Generates Assembled Constant Definitions for a Class of Symbols }
+        var i: 0 .. maxIdentLength;
+            s: SymbolIndex;
+            c: SymbolClasses;
+        begin
+            s := 0;
+            while s <> symTop do
+                begin
+                    s := s + 1;
+                    c := symClass[s];
+
+                    if ((c = class) or ((class = cUpdateOp) and
+                            ((c = cParmUpdateOp) or (c = cChoiceOp) or
+                            (c = cParmChoiceOp)))) and
+                            (symChars [symCharIndex[s]] <> quote) then
+                        begin
+                            { A real external symbol and not
+                              a string synonym, so output it  }
+                            write (outDefFile, tab);
+                            i := 0;
+                            repeat
+                                i := i + 1;
+                                write (outDefFile,
+                                    symChars [symCharIndex[s] + i - 1]);
+                            until i = symLength[s];
+
+                            write (outDefFile, ' = ');
+                            write (outDefFile, symValue[s]: 1, ';');
+
+			    { Add typing information for ssltrace to use }
+			    if (c = cParmUpdateOp) or (c = cParmChoiceOp) then
+				write (outDefFile,
+				    ' { (', symParmClass[s]: 1, ') }');
+
+			    if (c = cChoiceOp) or (c = cParmChoiceOp) then
+				write (outDefFile, 
+				    ' { >>', symResultClass[s]: 1, ' }');
+
+			    if (c = cChoiceRule) then
+				write (outDefFile, ' >>', symResultClass[s]: 1);
+
+                            writeln (outDefFile);
+                        end;
+                end;
+        end { GenerateClass };
+
+
+    procedure GenSymbolDefinitions;
+        { Generates Assembled Constant Definitions }
+        var c: SymbolClasses;
+        begin
+            rewrite (outDefFile {, NoutDefFile} );
+
+            write (outDefFile, tab, '{ Semantic Operations }');
+            writeln (outDefFile);
+            GenerateClass (cUpdateOp);        { Does all operations }
+            writeln (outDefFile);
+
+            write (outDefFile, tab, '{ Input Tokens }');
+            writeln (outDefFile);
+            GenerateClass (cInput);
+            writeln (outDefFile);
+
+            write (outDefFile, tab, '{ Output Tokens }');
+            writeln (outDefFile);
+            GenerateClass (cOutput);
+            writeln (outDefFile);
+
+            write (outDefFile, tab, '{ Input/Output Tokens }');
+            writeln (outDefFile);
+            GenerateClass (cInputOutput);
+            writeln (outDefFile);
+
+            write (outDefFile, tab, '{ Error Codes }');
+            writeln (outDefFile);
+            GenerateClass (cError);
+            writeln (outDefFile);
+
+            write (outDefFile, tab, '{ Type Values }');
+            writeln (outDefFile);
+            c := firstTypeClass;
+            while c < symNextValue[cType] do
+                begin
+		    write (outDefFile, tab, '{ Type ', c: 1, ' }');
+		    writeln (outDefFile);
+                    GenerateClass (c);
+                    c := c + 1;
+                end;
+            writeln (outDefFile);
+
+            write (outDefFile, tab, '{ S/SL Rule Table Addresses } {');
+	    writeln (outDefFile);
+            GenerateClass (cRule);
+            GenerateClass (cChoiceRule);
+	    write (outDefFile, tab, '}');
+	    writeln (outDefFile);
+        end { GenSymbolDefinitions };
+
+
+    procedure GenOutputTable;
+        { Generates the Assembled Output Table }
+        var i: OutputAddress;
+        begin
+            { Generate Table Parameters }
+            writeln (outDefFile);
+            write (outDefFile, tab, '{ S/SL Table Parameters }');
+            writeln (outDefFile);
+            write (outDefFile, tab, 'sslTblSize = ', outputPointer: 1, ';');
+            writeln (outDefFile);
+            write (outDefFile, tab, 'minSslTableValue = ', minOutputValue: 1,
+                ';');
+            writeln (outDefFile);
+            write (outDefFile, tab, 'maxSslTableValue = ', maxOutputValue: 1,
+                ';');
+            writeln (outDefFile);
+
+            { Generate Syntax/Semantic Table }
+            rewrite (outSslFile {, NoutSslFile} );
+            i := 0;
+            while i <> outputPointer do
+                begin
+                    write (outSslFile, outputTable[i]);
+                    i := i + 1;
+                end;
+
+            write (outSslFile, 0);
+        end { GenOutputTable };
+
+
+    { Syntax Error Handling }
+
+
+    procedure SslGenerateCompoundInputToken (expectedToken: InputTokens);
+        begin
+            SslAssert ((nextToken = tSyntaxError) or
+                (nextToken = tEndOfFile), 490);
+            compoundToken := expectedToken;
+            compndValue := 0;
+
+            case expectedToken of
+                tInteger:
+                    begin
+                        compndLength := 1;
+                        compndText[1] := '0';
+                    end;
+                tString:
+                    begin
+                        compndLength := 3;
+                        compndText[1] := quote;
+                        compndText[2] := '?';
+                        compndText[3] := quote;
+                    end;
+                tIdent:
+                    begin
+                        compndLength := 4;
+                        compndText[1] := '$';
+                        compndText[2] := 'N';
+                        compndText[3] := 'I';
+                        compndText[4] := 'L';
+                    end;
+            end;
+        end { SslGenerateCompoundInputToken };
+
+
+    procedure SslSyntaxError;
+        { This procedure handles syntax errors in the input
+          to the Parser pass; for Semantic passes this procedure
+          will simply assert false since a syntax error in
+          input would indicate an error in the previous pass.    }
+
+        { Syntax error recovery:
+          When a mismatch occurs between the the next input
+          token and the syntax table, the following recovery
+          is employed.                                                }
+
+        { If the expected token is tNewLine then if there
+          has been no previous syntax error on the line,
+          ignore the error.  (A missing logical new line
+          is not a real error.)                                        }
+
+        { If the expected token is tNewLine or tSemicolon and
+          a syntax error has already been detected on the
+          current logical line (flagged by nextToken =
+          tSyntaxError), then flush the input until a
+          new line or end of file is found.                        }
+
+        { Otherwise, if this is the first syntax error
+          detected on the line (flagged by nextToken
+          <> tSyntaxError), then if the input token
+          is tEndOfFile then emit the ePrematureEndOfFile
+          error code and terminate execution.  Otherwise,
+          emit the eSyntaxError error code and set
+          the nextToken to tSyntaxError to prevent
+          further input until the expected input is
+          tSemicolon or tNewLine.                                }
+
+        { If the expected token is not tSemicolon nor
+          tNewLine and a syntax error has already been
+          detected on the current line (flagged by
+          nextToken = tSyntaxError), then do nothing
+          and continue as if the expected token had
+          been matched.                                        }
+        begin
+            SslAssert ((operation = oInput) or (operation = oInputAny), 500);
+
+            if nextToken = tSyntaxError then
+                begin
+                    { Currently recovering from syntax error }
+                    if (sslTable[sslPointer] = tNewLine)
+                            or (sslTable[sslPointer] = tSemicolon) then
+                        begin
+                            { Complete recovery by synchronizing
+                              input to a new line                         }
+                            nextToken := savedToken;
+                            newInputLine := false;
+                            while (nextToken <> tSemicolon) and
+                                    (nextToken <> tEndOfFile) and
+                                    not newInputLine do
+                                AcceptInputToken;
+                        end;
+                end
+            else
+                { First syntax error on the line }
+                if sslTable[sslPointer] = tNewLine then
+                    { Ignore missing logical newlines }
+                    begin end
+                else if nextToken = tEndOfFile then
+                    begin
+                        { Flag error and terminate processing }
+                        Error (ePrematureEndOfFile);
+                        processing := false;
+                    end
+                else
+                    begin
+                        { Flag error and begin recovery }
+                        Error (eSyntaxError);
+                        savedToken := nextToken;
+                        nextToken := tSyntaxError;
+                        lineNumber := nextLineNumber;
+                    end;
+
+            { If the expected input token is a compound
+              token, generate a dummy one.                }
+            if (sslTable[sslPointer] >= firstCompoundToken) and
+                    (sslTable[sslPointer] <= lastCompoundToken) then
+                SslGenerateCompoundInputToken (sslTable[sslPointer]);
+        end { SslSyntaxError };
+
+
+    procedure SslTrace;
+        begin
+            write ('Table index ', sslPointer-1: 1, ';  Operation ',
+                operation: 1, ';  Argument ', sslTable[sslPointer]: 1);
+            writeln;
+        end  { SslTrace };
+
+
+    procedure SslFailure (failCode: FailureCodes);
+        begin
+            write ('### S/SL program failure:  ');
+
+            case failCode of
+                fSemanticChoiceFailed:
+                    write ('Semantic choice failed');
+                fChoiceRuleFailed:
+                    write ('Choice rule returned without a value');
+            end;
+
+            writeln;
+            write ('while processing line ', lineNumber);
+            writeln;
+            SslTrace;
+            SslAssert (false, 510);
+        end { SslFailure };
+
+
+    procedure SslChoice (tag: integer);
+        { This procedure performs both input and semantic
+          choices.  It sequentially tests each alternative
+          value against the tag value, and when a match is
+          found, performs a branch to the corresponding
+          alternative path.  If none of the alternative
+          values matches the tag value, sslTable interpretation
+          proceeds to the operation immediately following
+          the list of alternatives (normally the otherwise
+          path).  The flag choiceTagMatched is set to true
+          if a match is found and false otherwise.                }
+        var numberOfChoices:
+            integer;
+        begin
+            sslPointer := sslPointer + sslTable[sslPointer];
+            numberOfChoices := sslTable[sslPointer];
+            sslPointer := sslPointer + 1;
+            choiceTagMatched := false;
+
+            repeat
+                if sslTable[sslPointer] = tag then
+                    begin
+                        sslPointer := sslPointer + 1;
+                        sslPointer := sslPointer - sslTable[sslPointer];
+                        choiceTagMatched := true;
+                        numberOfChoices := 0;
+                    end
+                else
+                    begin
+                        sslPointer := sslPointer + 2;
+                        numberOfChoices := numberOfChoices - 1;
+                    end;
+            until numberOfChoices = 0;
+
+	    if tracing then
+		begin
+		    write ('Choice tag ', tag : 1);
+		    if choiceTagMatched then
+			write (' (matched)')
+		    else
+			write (' (not matched)');
+		    writeln
+		end
+
+        end { SslChoice };
+
+
+    procedure SslWalker;
+        var c: SymbolClasses;
+            d: SymbolClasses;
+            v: integer;
+            ch: char;
+        begin
+            { Get Run Options }
+            reset (optionFile {, NoptionFile} );
+
+            { Default is word tables }
+            maxOutputValue := maxInteger;
+            minOutputValue := -maxInteger;
+
+            { Default no listing, tracing }
+            tracing := false;
+            listing := false;
+
+            while (not eof (optionFile)) do
+                begin
+                    read (optionFile, ch);
+
+                    if ch = 't' then
+                        tracing := true
+                    else if ch = 'l' then
+                        listing := true
+                    else if ch = 'b' then
+                        begin
+                            { Byte tables }
+                            minOutputValue := minByte;
+                            maxOutputValue := maxByte;
+                        end
+                    else if ch = 'c' then
+                        begin
+                            { Char tables }
+                            minOutputValue := minChar;
+                            maxOutputValue := maxChar;
+                        end;
+                end;
+
+            { Initialize Table Walker State }
+            processing := true;
+            sslPointer := 0;
+            sslTop := 0;
+            noErrors := 0;
+            abort := false;
+
+            { Initialize Output }
+            outputPointer := 0;
+
+            { Initialize Input }
+            InitInputScanner;
+            nextToken := tNewLine;
+            nextLineNumber := 0;
+            newInputLine := false;
+            AcceptInputToken;
+
+            { Initialize Semantic Mechanisms }
+            InitSymbolTable;
+            InitCallTable;
+            InitCycleStack;
+            InitChoiceStack;
+
+            { Walk the S/SL Table }
+
+            while processing do
+                begin
+                    operation := sslTable[sslPointer];
+                    sslPointer := sslPointer + 1;
+
+                    { Trace Execution }
+                    if tracing then
+                        SslTrace;
+
+                    case operation of
+                        oCall:
+                            if sslTop < sslStkSize then
+                                begin
+                                    sslTop := sslTop + 1;
+                                    { If using short (one-element) calls: }
+                                    sslStack[sslTop] := sslPointer + 1;
+                                    sslPointer := sslTable[sslPointer];
+
+                                    { If using long (two-element) calls:
+                                    sslStack[sslTop] := sslPointer + 2;
+                                    sslPointer := sslTable[sslPointer] *
+                                        (maxSslTableValue+1) +
+                                        sslTable[sslPointer+1];
+                                    }
+                                end
+                            else
+                                begin
+                                    Error (eSslStackOverflow);
+                                    processing := false;
+                                end;
+                        oReturn:
+                            if sslTop = 0 then
+                                { Return from main S/SL rule }
+                                processing := false
+                            else
+                                begin
+                                    sslPointer := sslStack[sslTop];
+                                    sslTop := sslTop - 1;
+                                end;
+                        oRuleEnd:
+                            SslFailure (fChoiceRuleFailed);
+                        oJumpForward:
+                            sslPointer := sslPointer + sslTable[sslPointer];
+                        oJumpBack:
+                            sslPointer := sslPointer - sslTable[sslPointer];
+                        oInput:
+                            begin
+                                if sslTable[sslPointer] = nextToken then
+                                    AcceptInputToken
+                                else
+                                    { Syntax error in input }
+                                    SslSyntaxError;
+
+                                sslPointer := sslPointer + 1;
+                            end;
+                        oInputAny:
+                            if nextToken <> tEndOfFile then
+                                AcceptInputToken
+                            else
+                                { Premature end of file }
+                                SslSyntaxError;
+                        oInputChoice:
+                            begin
+                                SslChoice (nextToken);
+
+                                if choiceTagMatched then
+                                    AcceptInputToken;
+                            end;
+                        oEmit:
+                            begin
+                                Emit (sslTable[sslPointer]);
+                                sslPointer := sslPointer + 1;
+                            end;
+                        oError:
+                            begin
+                                Error (sslTable[sslPointer]);
+                                sslPointer := sslPointer + 1;
+                            end;
+                        oChoice:
+                            SslChoice (resultValue);
+                        oChoiceEnd:
+                            SslFailure (fSemanticChoiceFailed);
+                        oSetParameter:
+                            begin
+                                parameterValue := sslTable[sslPointer];
+                                sslPointer := sslPointer + 1;
+                            end;
+                        oSetResult:
+                            begin
+                                resultValue := sslTable[sslPointer];
+                                sslPointer := sslPointer + 1;
+                            end;
+
+                        { Semantic Operations of the S/SL Processor }
+
+                        { Call Table Mechanism Operations }
+                        oEnterCall:
+                            EnterCall;
+                        oEmitNullCallAddress:
+                            EmitNulCallAddress;
+                        oResolveCalls:
+                            ResolveCalls;
+
+                        { Symbol Table Mechanism Operations }
+                        oSetClass:
+                            xSetCurrentClass (parameterValue);
+                        osSetClassFromSymbolClass:
+                            begin
+                                xSymbolClass (c);
+                                xSetCurrentClass (c);
+                            end;
+                        ouSetClassFromSymbolValue:
+                            begin
+                                SymbolValue (v);
+                                xSetCurrentClass (v);
+                            end;
+                        ovSetClassFromSymbolResultClass:
+                            begin
+                                SymbolResultClass (c);
+                                xSetCurrentClass (c);
+                            end;
+                        owSetClassFromSymbolParameterClass:
+                            begin
+                                SymbolParameterClass (c);
+                                xSetCurrentClass (c);
+                            end;
+                        oxSetClassFromChoiceClass:
+                            begin
+                                ClassOfChoice (c);
+                                xSetCurrentClass (c);
+                            end;
+                        oChooseClass:
+                            begin
+                                CurrentClass (c);
+                                resultValue := c;
+                            end;
+                        oySetClassValue:
+                            SetNextValueOfCurrentClass (compndValue);
+                        ozSetClassValueFromSymbolValue:
+                            begin
+                                SymbolValue (v);
+                                SetNextValueOfCurrentClass (v);
+                            end;
+                        oIncrementClassValue:
+                            IncrementCurrentClassValue;
+                        oEnterNewSymbol:
+                            EnterNewSymbol;
+                        oLookupSymbol:
+                            LookupSymbol;
+                        oChangeSymbolClass:
+                            ChangeSymbolClass;
+                        oChooseSymbolClass:
+                             begin
+                                xSymbolClass (c);
+                                resultValue := c;
+                            end;
+                        oVerifySymbolClass:
+                            begin
+                                xSymbolClass (c);
+                                CurrentClass (d);
+
+                                if c = d then
+                                    resultValue := valid
+                                else
+                                    resultValue := invalid;
+                            end;
+                        oxEnterNewSymbolValue:
+                            xEnterNewSymbolValue;
+                        oEnterSecondNewSymbolValue:
+                            EnterSecondNewSymbolValue;
+                        oEnterSymbolValueFromAddress:
+                            EnterSymbolValueFromAddress;
+                        oxChooseSymbolValue:
+                            SymbolValue (resultValue);
+                        oEmitSymbolValue:
+                            begin
+                                SymbolValue (v);
+                                Emit (v);
+                            end;
+                        oxVerifySymbolClassValue:
+                            begin
+                                SymbolValue (v);
+                                CurrentClass (c);
+
+                                if v = c then
+                                    resultValue := valid
+                                else
+                                    resultValue := invalid;
+                            end;
+                        oxEnterSymbolParameterClass:
+                            xEnterSymbolParameterClass;
+                        oyEnterSymbolResultClass:
+                            yEnterSymbolResultClass;
+                        oyChooseSymbolResultClass:
+                            begin
+                                SymbolResultClass(c);
+                                resultValue := c;
+                            end;
+                        oSaveEnclosingSymbol:
+                            SaveEnclosingSymbol;
+                        oRestoreEnclosingSymbol:
+                            RestoreEnclosingSymbol;
+                        oSaveCurrentSymbol:
+                            SaveCurrentSymbol;
+                        owRestoreCurrentSymbol:
+                            RestoreCurrentSymbol;
+
+                        { Cycle Stack Mechanism Operations }
+                        oPushCycle:
+                            PushCycle;
+                        oPopCycle:
+                            PopCycle;
+                        owChooseCycleDepth:
+                            CycleDepth (resultValue);
+                        oEmitCycleAddress:
+                            EmitCycleAddress;
+                        oEnterCycleExit:
+                            EnterCycleExit;
+                        owResolveCycleExits:
+                            ResolvCycleExits;
+                        ozChooseCycleExits:
+                            CyclExits (resultValue);
+
+                        { Choice Stack Mechanism Operations }
+                        oPushChoice:
+                            begin
+                                CurrentClass (c);
+                                PushChoice (c);
+                            end;
+                        oPopChoice:
+                            PopChoice;
+                        oChangeChoiceClass:
+                            begin
+                                CurrentClass (c);
+                                ChangeChoiceClass (c);
+                            end;
+                        osChooseChoiceClass:
+                            begin
+                                ClassOfChoice (c);
+                                resultValue := c;
+                            end;
+                        oVerifyChoiceSymbolLabel:
+                            begin
+                                SymbolValue (v);
+                                VerifyChoiceLabel (resultValue, v);
+                            end;
+                        oEnterChoiceSymbolLabel:
+                            begin
+                                SymbolValue (v);
+                                xEnterChoiceLabel (v);
+                            end;
+                        oxEnterChoiceMerge:
+                            EnterChoiceMerge;
+                        oxResolveChoiceMerges:
+                            ResolvChoiceMerges;
+                        oEmitChoiceTable:
+                            EmitChoiceTable;
+                        osResolveChoiceTableAddress:
+                            xResolveChoiceTableAddress;
+                        oEmitFirstChoiceValue:
+                            xEmitFirstChoiceValue;
+                        oxEmitFirstChoiceAddress:
+                            EmitFirstChoiceAddress;
+
+                        { Generate Output Operations }
+                        oGenerateDefinitions:
+                            GenSymbolDefinitions;
+                        owGenerateTable:
+                            GenOutputTable;
+
+                        { Miscellaneous Output Operations }
+                        oEmitValue:
+                            Emit (compndValue);
+                        owEmitNullAddress:
+                            EmitNullAddress;
+                    end { case operation };
+
+                end { while processing };
+
+            if (nextToken <> tEndOfFile) and not abort then
+                Error (eExtraneousProgramText);
+        end { SslWalker };
+
+
+    begin
+        { Set Standard Characters }
+        newline := chr(10);        { ***** 10 ASCII (LF), 21 EBCDIC (NL) }
+        newpage := chr(12);        { ***** 12 ASCII (FF), 12 EBCDIC (FF) }
+        endfile := chr(0);        { ***** 0 ASCII (NUL), 0 EBCDIC (NUL) }
+
+	{ Get UNIX file names as arguments }
+	{
+	argv (1, NsslFile);
+	argv (2, NinFile);
+	argv (3, NoutDefFile);
+	argv (4, NoutSslFile);
+	argv (5, NlistFile);
+	argv (6, NoptionFile);
+	}
+
+        { Read in the S/SL Table }
+        reset (sslFile {, NsslFile} );
+        i := 0;
+        repeat
+            read (sslFile, j);
+            SslAssert (i <= sslTblSize, 520);
+            sslTable[i] := j;
+            i := i + 1;
+        until eof (sslFile);
+
+        { Walk the S/SL Table }
+        SslWalker;
+    end { SslProcessor }.

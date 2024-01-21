@@ -1,0 +1,9 @@
+for i in parser semantic coder
+do
+	cd $i
+	ptc -O -S $i.pt
+	mv $i.s $i.s.old
+	ptc -O -S -L ../../test/testlib $i.pt
+	cmp $i.s $i.s.old
+	cd ..
+done

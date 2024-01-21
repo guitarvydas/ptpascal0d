@@ -1,0 +1,57 @@
+program lunch (output);
+
+var animal : array 1 .. 8 of string;
+    remark : array 1 .. 8 of string;
+
+var countdown : int;
+
+begin
+    animal (1) := "fly";
+    animal (2) := "spider";
+    animal (3) := "bird";
+    animal (4) := "cat";
+    animal (5) := "dog";
+    animal (6) := "goat";
+    animal (7) := "cow";
+    animal (8) := "horse";
+
+    
+    remark (1) := "I don't know why she swallowed a fly.";
+    remark (2) := "That wiggled and jiggled and tickled inside her.";
+    remark (3) := "How absurd, to swallow a bird.";
+    remark (4) := "Imagine that, she swallowed a cat.";
+    remark (5) := "What a hog, to swallow a dog.";
+    remark (6) := "What a dope, to swallow a goat.";
+    remark (7) := "I don't know how she swallowed that cow.";
+    remark (8) := "She died of course.";
+
+    write ("I Know an Old Lady"); writeln;
+
+    for verse := 1 to 8 do
+	begin
+	    writeln;
+	    write ("I know an old lady"); writeln;
+	    write ("Who swallowed a " + animal (verse)); writeln;
+	    write (remark (verse)); writeln;
+
+	    countdown := verse;
+	    loop
+		exit when countdown < 2
+		write ("She swallowed the " + animal (countdown) + 
+		    " to catch the " + animal (countdown - 1) + ","); writeln;
+		countdown := countdown - 1
+	    end loop;
+
+	    if verse > 1 then
+		begin
+		    write (remark (1)); writeln
+		end;
+
+	    if verse < 8 then
+		begin
+		    write ("Perhaps she'll die."); writeln
+		end
+	end;
+
+	writeln; write ("The end."); writeln
+    end.

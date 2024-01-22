@@ -1,25 +1,25 @@
 pt {
-  Program = kw<"program"> ID FormalParameters ";" Block "."
- 
-  FormalParameters =
-    | "(" ")" -- empty
-    | "(" FormalParameter CommaFormalID* ")" -- nonempty
+  Program [_program ID FormalParameters _semicolon Block _dot] =
+    ‛\n(define («ID» «FormalParameters») «Block»)’
 
-  FormalParameter =
-    | kw<"var"> ID -- var
-    |           ID -- id
+  FormalParameters_empty [_lp _rp] = ‛’
+  FormalParameters_nonempty [_lp p ps* _rp] = ‛«p» «ps»’
+  
+  FormalParameter_var [_var ID] = ‛«ID»’
+  FormalParameter_id [ID] = ‛«ID»’
     
-  CommaFormalID = "," FormalID
-  FormalID = ID
+  CommaFormalID [_comma FormalID] = ‛«FormalID»’
+  FormalID [ID] ‛«ID»’
 
-  Block = ConstantDefinitions
+  Block [ConstantDefinitions? ConstantDefinitions? TypeDefinitions? VariableDeclarations? ProcedureDefinition* BeginStatement] = ‛«ConstantDefinitions» «ConstantDefinitions» «TypeDefinitions» «VariableDeclarations» «ProcedureDefinition» «BeginStatement»’
 
-  ConstantDefinitions = (kw<"const"> ConstantDefinition*)? TypeDefinitions
-  TypeDefinitions = (kw<"type"> TypeDefinition*)? VariableDeclarations
-  VariableDeclarations = (kw<"var"> VariableDeclaration*)? ProcedureDefinition
-  ProcedureDefinition = (kw<"procedure"> ID ProcedureHeading Block ";")* BeginStatement
+  ConstantDefinitions [_const ConstantDefinition*] = ‛«ConstantDefinition»’
+  TypeDefinitions [_type TypeDefinition*] = ‛«TypeDefinition»’
+  VariableDeclarations [_varVariableDeclaration*] = ‛«VariableDeclaration»’
+  ProcedureDefinition [_procedure ID ProcedureHeading Block _semicolon] =
+    ‛\n(define («ID» «ProcedureHeading») «Block»)’
 
-    ConstantDefinition = ID "=" ConstantValue ";" ConstantDefinition?
+    ConstantDefinition = ID "=" ConstantValue ";"
     TypeDefinition = ID "=" TypeBody ";"
 
     ConstantValue =  
@@ -28,9 +28,9 @@ pt {
       | Literal
 
     TypeBody =
-      | kw<"packed"> kw<"array"> "[" SimpleType "]" kw<"of"> SimpleType -- packedarray
-      |              kw<"array"> "[" SimpleType "]" kw<"of"> SimpleType -- array
-      | kw<"file">                                  kw<"of"> SimpleType -- file
+      | _packed"> _array"> "[" SimpleType "]" _of"> SimpleType -- packedarray
+      |              _array"> "[" SimpleType "]" _of"> SimpleType -- array
+      | _file">                                  _of"> SimpleType -- file
       |                                                      SimpleType -- simple
 
     SimpleType =
@@ -43,7 +43,7 @@ pt {
    ProcedureHeading = FormalParameters ";"
 
 
-     BeginStatement = kw<"begin"> Statement SemicolonStatement* kw<"end">
+     BeginStatement = _begin"> Statement SemicolonStatement* _end">
 
      SemicolonStatement = ";" Statement
 
@@ -56,12 +56,12 @@ pt {
        | AssignmentStatement
        | CallStatement
 
-     IfStatement = kw<"if"> Expression kw<"then"> Statement ElseStatement?
-     ElseStatement = kw<"else"> Statement
+     IfStatement = _if"> Expression _then"> Statement ElseStatement?
+     ElseStatement = _else"> Statement
 
-     WhileStatement = kw<"while"> Expression kw<"do"> Statement
-     CaseStatement = kw<"case"> Expression kw<"of"> CaseAlternative+ kw<"end">
-     RepeatStatement = kw<"repeat"> Statement kw<"until"> Expression
+     WhileStatement = _while"> Expression _do"> Statement
+     CaseStatement = _case"> Expression _of"> CaseAlternative+ _end">
+     RepeatStatement = _repeat"> Statement _until"> Expression
      AssignmentStatement = Lval ":=" Expression
      CallStatement =
        | ID "(" ExprWithFieldWidth ("," ExprWithFieldWidth)* ")" -- withargs
@@ -85,18 +85,18 @@ pt {
        | SimpleExpression ">=" SimpleExpression -- ge
        | SimpleExpression -- other
 
-      SimpleExpression = ("+" | "-")? Term (("+" | "-" | kw<"or">) Term)*
+      SimpleExpression = ("+" | "-")? Term (("+" | "-" | _or">) Term)*
       Term = 
         | Factor "*"       Factor -- mul
-        | Factor kw<"div"> Factor -- div
-        | Factor kw<"mod"> Factor -- mod
-        | Factor kw<"and"> Factor -- and
+        | Factor _div"> Factor -- div
+        | Factor _mod"> Factor -- mod
+        | Factor _and"> Factor -- and
         | Factor -- other
 	
       Factor =
 	| Integer -- int
 	| "(" Expression ")" -- parenthesized
-	| kw<"not"> Factor -- not
+	| _not"> Factor -- not
 	| Literal -- lit
 	| ID IdentifierExtension -- idwithextension
 	| ID -- other

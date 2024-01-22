@@ -12,15 +12,15 @@ pt {
   CommaFormalID = "," FormalID
   FormalID = ID
 
-  Block = ConstantDefinitions? TypeDefinitions? VariableDeclarations? ProcedureDefinition+ kw<"begin"> BeginStatement+
+  Block = ConstantDefinitions? ConstantDefinitions? TypeDefinitions? VariableDeclarations? ProcedureDefinition* BeginStatement
 
   ConstantDefinitions = kw<"const"> ConstantDefinition*
   TypeDefinitions = kw<"type"> TypeDefinition*
   VariableDeclarations = kw<"var"> VariableDeclaration*
   ProcedureDefinition = kw<"procedure"> ID ProcedureHeading Block ";"
 
-    ConstantDefinition = ID ConstantValue ";"
-    TypeDefinition = ID "=" TypeBody
+    ConstantDefinition = ID "=" ConstantValue ";"
+    TypeDefinition = ID "=" TypeBody ";"
 
     ConstantValue =  
       | Integer
@@ -43,7 +43,9 @@ pt {
    ProcedureHeading = FormalParameters ";"
 
 
-     BeginStatement = kw<"begin"> Statement* kw<"end">
+     BeginStatement = kw<"begin"> Statement SemicolonStatement* kw<"end">
+
+     SemicolonStatement = ";" Statement
 
      Statement =
        | BeginStatement
@@ -60,13 +62,14 @@ pt {
      WhileStatement = kw<"while"> Expression kw<"do"> Statement
      CaseStatement = kw<"case"> Expression kw<"of"> CaseAlternative+ kw<"end">
      RepeatStatement = kw<"repeat"> Statement kw<"until"> Expression
-     AssignmentStatement = LvalSubscript? ":=" Expression
+     AssignmentStatement = Lval ":=" Expression
      CallStatement =
-       | ID "(" ")" -- empty
-       | ID "(" ExprWithFieldWidth ("," ExprWithFieldWidth)* ")" -- nonempty
+       | ID "(" ExprWithFieldWidth ("," ExprWithFieldWidth)* ")" -- withargs
+       | ID  -- noargs
 
      ExprWithFieldWidth = Expression (":" Expression)?
 
+       Lval = ID LvalSubscript? 
        LvalSubscript = "[" Expression "]"
 
 	 
@@ -113,6 +116,6 @@ pt {
 	  ID = "❲"  idchar+  "❳"
 	  idchar = ~"❲" ~"❳" any
 	  unsignedInteger = digit+
-	  Literal = "‛" litchar* "’"
-	  litchar = ~"‛" ~"’" any
+	  Literal = "“" litchar* "”"
+	  litchar = ~"“" ~"”" any
 }

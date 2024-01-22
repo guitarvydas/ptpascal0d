@@ -1,0 +1,6 @@
+words {
+  input [items+] = ‛«items»’
+  word [first rest*] = ‛❲«encodeURIComponent (first + rest)»❳’
+  comment [_lb cs* _rb] = ‛«_lb»«cs»«_rb»’
+  string [lq cs* rq] = ‛«lq»«cs»«rq»’
+}

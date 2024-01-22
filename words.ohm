@@ -1,0 +1,19 @@
+words {
+  input = item+
+  item =
+    | comment -- comment
+    | string -- string
+    | word -- word
+    | any -- other
+
+  word = firstchar legalchar*
+  firstchar = letter | "_"
+  legalchar = letter | digit | "_"
+
+  string = strbegin strchar* strend
+  strbegin = "“"
+  strend = "”"
+  strchar = ~strbegin ~strend any
+  comment = "⌈" notcomment* "⌉"
+  notcomment = ~"⌈" ~"⌉" any
+}

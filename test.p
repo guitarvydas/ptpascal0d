@@ -1,8 +1,7 @@
 program p (output);
-var v : integer;
 const c = 5;
-var d : char;
 type t = integer;
+var d : char;
 begin
     while (d = 'd') do
     begin

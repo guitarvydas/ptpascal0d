@@ -1,0 +1,7 @@
+literal {
+  input [item+] = ‛«item»’
+  item_literal [_sq1 cs* _sq2] = ‛“«encodeURIComponent (cs)»”’
+  item_other [c] = ‛«c»’
+}
+
+

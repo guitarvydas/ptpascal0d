@@ -1,0 +1,10 @@
+literal {
+  input = item+
+  item =
+    | sq notsq* sq -- literal
+    | any          -- other
+
+  notsq = ~sq ~nl any
+  nl = "\n"
+  sq = "'"
+}

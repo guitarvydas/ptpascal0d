@@ -70,12 +70,12 @@
      
      BeginStatement = kw<"begin"> Statement kw<"end"> Continuation?
 
-     IfStatement = kw<"if"> Expression kw<"then"> Statement ElseStatement? Continuation?
+     IfStatement = kw<"if"> BooleanExpression kw<"then"> Statement ElseStatement? Continuation?
      ElseStatement = kw<"else"> Statement
 
-     WhileStatement = kw<"while"> Expression kw<"do"> Statement Continuation?
+     WhileStatement = kw<"while"> BooleanExpression kw<"do"> Statement Continuation?
      CaseStatement = kw<"case"> Expression kw<"of"> CaseAlternative+ kw<"end"> Continuation?
-     RepeatStatement = kw<"repeat"> Statement kw<"until"> Expression Continuation?
+     RepeatStatement = kw<"repeat"> Statement kw<"until"> BooleanExpression Continuation?
      AssignmentStatement = Lval ":=" Expression Statement? Continuation?
      CallStatement =
        | ID "(" Arg CommaArg* ")"  Continuation? -- withargs

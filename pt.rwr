@@ -53,7 +53,7 @@ pt {
      ElseStatement [_else Statement] = ‛«Statement»’
 
      WhileStatement [_while Expression _do Statement cont?] = ‛(while «Expression»«Statement»)«cont»’
-     CaseStatement [_case Expression _of CaseAlternative+ _end cont?] ‛«_.pushnewsym()»’ = ‛(let ((«_.sym()» «Expression»))«CaseAlternative»)«_.popsym()»«cont»’
+     CaseStatement [_case Expression _of CaseAlternative+ _end cont?] ‛«_.pushNewSymbol()»’ = ‛(let ((«_.symbol()» «Expression»))«CaseAlternative»)«_.popSymbol()»«cont»’
      RepeatStatement [_repeat Statement _until Expression cont?] = ‛\n(repeat«Statement»\n«Expression»)«cont»’
      AssignmentStatement [Lval _assign Expression cont?] = ‛\n(let ((«Lval» «Expression»))«cont»)’
      CallStatement_withargs [ID Arg MoreArgs* cont?] = ‛\n(«ID» «Arg» «MoreArgs»)«cont»’

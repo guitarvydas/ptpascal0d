@@ -1,4 +1,4 @@
-pt {
+        pt {
   Program = kw<"program"> ID FormalParameters ";" Block "."
  
   FormalParameters =
@@ -55,12 +55,7 @@ pt {
       | Integer ".." Integer -- intrange
 
 
-   ProcedureHeading = FormalParameters ";"
-
-
-     BeginStatement = kw<"begin"> Statement SemicolonStatement? kw<"end">
-
-     SemicolonStatement = ";" Statement SemicolonStatement?
+    ProcedureHeading = FormalParameters ";"
 
      Statement =
        | BeginStatement
@@ -71,66 +66,87 @@ pt {
        | AssignmentStatement
        | CallStatement
 
-     IfStatement = kw<"if"> Expression kw<"then"> Statement ElseStatement?
+     Continuation = ";" Statement
+     
+     BeginStatement = kw<"begin"> Statement kw<"end"> Continuation?
+
+     IfStatement = kw<"if"> Expression kw<"then"> Statement ElseStatement? Continuation?
      ElseStatement = kw<"else"> Statement
 
-     WhileStatement = kw<"while"> Expression kw<"do"> Statement
-     CaseStatement = kw<"case"> Expression kw<"of"> CaseAlternative+ kw<"end">
-     RepeatStatement = kw<"repeat"> Statement kw<"until"> Expression
-     AssignmentStatement = Lval ":=" Expression
+     WhileStatement = kw<"while"> Expression kw<"do"> Statement Continuation?
+     CaseStatement = kw<"case"> Expression kw<"of"> CaseAlternative+ kw<"end"> Continuation?
+     RepeatStatement = kw<"repeat"> Statement kw<"until"> Expression Continuation?
+     AssignmentStatement = Lval ":=" Expression Statement? Continuation?
      CallStatement =
-       | ID "(" ExprWithFieldWidth ("," ExprWithFieldWidth)? ")" -- withargs
-       | ID  -- noargs
+       | ID "(" Arg CommaArg* ")"  Continuation? -- withargs
+       | ID  Continuation? -- noargs
 
-     ExprWithFieldWidth = Expression (":" Expression)?
+       Arg = Expression
+       ArgWithFieldWidth = Expression ColonExpression
+       ColonExpression = ":" Expression
+       CommaArg = "," Arg
 
-       Lval = ID LvalSubscript? 
-       LvalSubscript = "[" Expression "]"
+       Lval =
+         | ID "[" Expression "]" -- subscripted
+         | ID                    -- plain
 
-	 
-       CaseAlternative = Integer CommaInteger? ":" Statement
-       CommaInteger = "," Integer CommaInteger?
+         
+       CaseAlternative = Integer CommaInteger* ":" Statement
+       CommaInteger = "," Integer
 
-     Expression = 
-       | SimpleExpression "="  SimpleExpression -- eq
-       | SimpleExpression "<>" SimpleExpression -- ne
-       | SimpleExpression "<"  SimpleExpression -- lt
-       | SimpleExpression "<=" SimpleExpression -- le
-       | SimpleExpression ">"  SimpleExpression -- gt
-       | SimpleExpression ">=" SimpleExpression -- ge
+     Expression = BooleanOrExpression
+
+     BooleanOrExpression = 
+       | BooleanAndExpression kw<"or"> BooleanOrExpression -- or
+       | BooleanAndExpression -- other
+     BooleanAndExpression = 
+       | BooleanExpression kw<"and"> BooleanAndExpression -- and
+       | BooleanExpression -- other
+
+     BooleanExpression =
+       | SimpleExpression "="  BooleanExpression -- eq
+       | SimpleExpression "<>" BooleanExpression -- ne
+       | SimpleExpression "<"  BooleanExpression -- lt
+       | SimpleExpression "<=" BooleanExpression -- le
+       | SimpleExpression ">"  BooleanExpression -- gt
+       | SimpleExpression ">=" BooleanExpression -- ge
        | SimpleExpression -- other
 
-      SimpleExpression = ("+" | "-")? Term (("+" | "-" | kw<"or">) Term)*
+      SimpleExpression =
+        | Term "-" SimpleExpression -- minus
+        | Term "+" SimpleExpression -- plus
+        | Term -- other
+      
       Term = 
-        | Factor "*"       Factor -- mul
-        | Factor kw<"div"> Factor -- div
-        | Factor kw<"mod"> Factor -- mod
-        | Factor kw<"and"> Factor -- and
+        | Factor "*"       Term -- mul
+        | Factor kw<"div"> Term -- div
+        | Factor kw<"mod"> Term -- mod
+        | Factor kw<"and"> Term -- and
         | Factor -- other
-	
+        
       Factor =
-	| Integer -- int
-	| "(" Expression ")" -- parenthesized
-	| kw<"not"> Factor -- not
-	| Literal -- lit
-	| ID IdentifierExtension -- idwithextension
-	| ID -- other
+        | "(" Expression ")" -- parenthesized
+        | kw<"not"> Factor -- not
+        | Literal -- lit
+        | Integer
+        | "-" Variable -- negvar
+        | "+"? Variable -- var
 
-       IdentifierExtension =
-         | "[" Expression "]" -- subscript
-	 | "(" Expression ")" -- paren
+        Variable =
+          | Variable Subscript -- subscript
+          | ID -- id
+          
+        Subscript = "[" Expression "]"
 
-       
-	Integer =
-	  | "-" unsignedInteger -- neg
-	  | "+" unsignedInteger -- pos
-	  |     unsignedInteger -- other
-
-	  id<s> = "❲" s "❳"
-	  kw<s> = id<s>
-	  ID = "❲"  idchar+  "❳"
-	  idchar = ~"❲" ~"❳" any
-	  unsignedInteger = digit+
-	  Literal = "“" litchar* "”"
-	  litchar = ~"“" ~"”" any
+        Integer =
+          | "-" unsignedInteger -- neg
+          | "+"? unsignedInteger -- other
+          
+          id<s> = "❲" s "❳"
+          kw<s> = id<s>
+          ID = "❲"  idchar+  "❳"
+          idchar = ~"❲" ~"❳" any
+          unsignedInteger = digit+
+          Literal = "“" litchar* "”"
+          litchar = ~"“" ~"”" any
 }

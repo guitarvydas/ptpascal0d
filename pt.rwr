@@ -11,83 +11,84 @@ pt {
   CommaFormalID [_comma FormalID] = ‛«FormalID»’
   FormalID [ID] ‛«ID»’
 
-  Block [ConstantDefinitions? ConstantDefinitions? TypeDefinitions? VariableDeclarations? ProcedureDefinition* BeginStatement] = ‛«ConstantDefinitions» «ConstantDefinitions» «TypeDefinitions» «VariableDeclarations» «ProcedureDefinition» «BeginStatement»’
+  Block [ConstantDefinitions] = ‛«ConstantDefinitions»’
 
-  ConstantDefinitions [_const ConstantDefinition*] = ‛«ConstantDefinition»’
-  TypeDefinitions [_type TypeDefinition*] = ‛«TypeDefinition»’
-  VariableDeclarations [_varVariableDeclaration*] = ‛«VariableDeclaration»’
-  ProcedureDefinition [_procedure ID ProcedureHeading Block _semicolon] =
-    ‛\n(define («ID» «ProcedureHeading») «Block»)’
+  ConstantDefinitions_consts [_const def] = ‛«def»’
+  ConstantDefinitions_noconsts [typedef] = ‛«typedef»’
+  TypeDefinitions_types [_type TypeDefinition] = ‛«TypeDefinition»’
+  TypeDefinitions_notypes [VariableDefinitions] = ‛«VariableDefinitions»’
+  VariableDeclarations_variables [_var VariableDeclaration] = ‛«VariableDeclaration»’
+  VariableDeclarations_novariables [ProcedureDefinitions] = ‛«ProcedureDefinitions»’
 
-    ConstantDefinition = ID "=" ConstantValue ";"
-    TypeDefinition = ID "=" TypeBody ";"
+    ConstantDefinition_consts [ID _eq ConstantValue _semicolon ConstantDefinition] = ‛\n(let ((«ID» «ConstantValue»)) «ConstantDefinition»)’
+    ConstantDefinition_noconsts [TypeDefinitions] = ‛«TypeDefinitions»’
+    TypeDefinition_types [ID _eq TypeBody _semicolon TypeDefinition] = ‛\n⟪+ name=«ID» kind=type def=«TypeBody»⟫«TypeDefinition»’
+    TypeDefinition_notypes [VariableDeclarations] = ‛«VariableDeclarations»’
+    VariableDeclaration_vars [ID _colon TypeBody _semicolon VariableDeclaration] = ‛(let ((ID ⟪name=«ID» kind=var type=«TypeBody»⟫ nil))«VariableDeclaration»)’
+    VariableDeclaration_novars [ProcedureDefinitions] = ‛«ProcedureDefinitions»’
+    ProcedureDefinitions_proc [_procedure ID ProcedureHeading Block _semicolon ProcedureDefinitions] =‛(let ((«ID» (lambda («ProcedureHeading»)«Block»)))«ProcedureDefinitions»)’
+    ProcedureDefinitions_noproc [BeginStatement] =‛«BeginStatement»’
 
-    ConstantValue =  
-      | Integer
-      | ID
-      | Literal
+    ConstantValue [v] = ‛«v»’ 
 
-    TypeBody =
-      | _packed"> _array"> "[" SimpleType "]" _of"> SimpleType -- packedarray
-      |              _array"> "[" SimpleType "]" _of"> SimpleType -- array
-      | _file">                                  _of"> SimpleType -- file
-      |                                                      SimpleType -- simple
+    TypeBody_packedarray [_packed _array _lb SimpleType _rb _of SimpleType] = ‛⟪+ kind=type def=packedArray («SimpleType»)⟫’
+    TypeBody_array [_array _lb SimpleType _rb _of SimpleType] = ‛⟪+ kind=type def=array («SimpleType»)⟫’
+    TypeBody_file [_file _of SimpleType] = ‛⟪+ kind=type def=file («SimpleType»)⟫’
+    TypeBody_simple [_file _of SimpleType] = ‛⟪+ kind=type def=«SimpleType»⟫’
 
-    SimpleType =
-      | ID ".." Integer -- idrange
-      | ID -- id
-      | Integer ".." Integer -- intrange
+    SimpleType_idrange [ID _dotdot Integer] = ‛⟪+ kind=type def=idrange («ID» «Integer»)⟫’
+    SimpleType_id [ID] = ‛⟪+ kind=type def=«ID»⟫’
+    SimpleType_intrange [Integer1 _dotdot Integer2] = ‛⟪+ kind=type def=idrange («Integer1» «Integer2»)⟫’
 
-   VariableDeclaration = ID ":" TypeBody ";"
-
-   ProcedureHeading = FormalParameters ";"
+   ProcedureHeading [FormalParameters _semicolon] = ‛«FormalParameters»’
 
 
-     BeginStatement = _begin"> Statement SemicolonStatement* _end">
+     BeginStatement [_begin Statement SemicolonStatement* _end cont?] = ‛\n(progn«Statement»«SemicolnStatement»)«cont»’
 
-     SemicolonStatement = ";" Statement
+     Statement [s] =‛«s»’
 
-     Statement =
-       | BeginStatement
-       | IfStatement
-       | WhileStatement
-       | CaseStatement
-       | RepeatStatement
-       | AssignmentStatement
-       | CallStatement
+     IfStatement [_if Expression _then Statement ElseStatement? cont?] = ‛\n(if «Expression»«Statement»«ElseStatement»)«cont»’
+     ElseStatement [_else Statement] = ‛«Statement»’
 
-     IfStatement = _if"> Expression _then"> Statement ElseStatement?
-     ElseStatement = _else"> Statement
+     WhileStatement [_while Expression _do Statement cont?] = ‛(while «Expression»«Statement»)«cont»’
+     CaseStatement [_case Expression _of CaseAlternative+ _end cont?] ‛«_.pushnewsym()»’ = ‛(let ((«_.sym()» «Expression»))«CaseAlternative»)«_.popsym()»«cont»’
+     RepeatStatement [_repeat Statement _until Expression cont?] = ‛\n(repeat«Statement»\n«Expression»)«cont»’
+     AssignmentStatement [Lval _assign Expression cont?] = ‛\n(let ((«Lval» «Expression»))«cont»)’
+     CallStatement_withargs [ID Arg MoreArgs* cont?] = ‛\n(«ID» «Arg» «MoreArgs»)«cont»’
+     CallStatement_noargs [ID  cont?] =  ‛\n(«ID»)«cont»’
 
-     WhileStatement = _while"> Expression _do"> Statement
-     CaseStatement = _case"> Expression _of"> CaseAlternative+ _end">
-     RepeatStatement = _repeat"> Statement _until"> Expression
-     AssignmentStatement = Lval ":=" Expression
-     CallStatement =
-       | ID "(" ExprWithFieldWidth ("," ExprWithFieldWidth)* ")" -- withargs
-       | ID  -- noargs
+     Arg [e] = ‛«e»’
+     ArgWithFieldWidth [e fieldWidth] = ‛(field-width «fieldWidth» «e»)’
+     ColonExpression [_colon Expression] = ‛«Expression»’
+     CommaArg [_comma Arg] = ‛«Arg»’
 
-     ExprWithFieldWidth = Expression (":" Expression)?
-
-       Lval = ID LvalSubscript? 
-       LvalSubscript = "[" Expression "]"
+       Lval_subscripted [ID _lb Expression _rb] = ’(aref «ID» «Expresssion»)’
+       Lval_plain [ID] = ’«ID»’
 
 	 
-       CaseAlternative = Integer CommaInteger* ":" Statement
-       CommaInteger = "," Integer
+       CaseAlternative [Integer MoreIntegers? _colon Statement] = ’\n((«Integer» «MoreIntegers»)«Statement»)’
+       CommaInteger [_comma Integer CommaInteger?] = ‛«Integer» «CommaInteger»’
 
-     Expression = 
-       | SimpleExpression "="  SimpleExpression -- eq
-       | SimpleExpression "<>" SimpleExpression -- ne
-       | SimpleExpression "<"  SimpleExpression -- lt
-       | SimpleExpression "<=" SimpleExpression -- le
-       | SimpleExpression ">"  SimpleExpression -- gt
-       | SimpleExpression ">=" SimpleExpression -- ge
-       | SimpleExpression -- other
+???
+       Expression [b] = ‛«b»’
 
-      SimpleExpression = ("+" | "-")? Term (("+" | "-" | _or">) Term)*
+       Expression_eq [e1 _eq e2] = ‛(= «e1» «e2»)’
+       Expression_ne [e1 _ne e2] = ‛(not (= «e1» «e2»))’
+       Expression_lt [e1 _lt e2] = ‛(< «e1» «e2»)’
+       Expression_le [e1 _le e2] = ‛(<= «e1» «e2»)’
+       Expression_gt [e1 _gt e2] = ‛(> «e1» «e2»)’
+       Expression_ge [e1 _ge e2] = ‛(>= «e1» «e2»)’
+       Expression_or [e1 _or e2] = ‛(>= «e1» «e2»)’
+       Expression_other [e1] = ‛«e1»’
+
+??? need to invert the sense of this
+      SimpleExpression =
+        | "-" Term MoreTerm* -- neg
+        | "+"? Term MoreTerm* -- pos
+      MoreTerm = ("+" | "-" | kw<"or">) Term
+      
       Term = 
-        | Factor "*"       Factor -- mul
+        | Factor "*"    Factor -- mul
         | Factor _div"> Factor -- div
         | Factor _mod"> Factor -- mod
         | Factor _and"> Factor -- and

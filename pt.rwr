@@ -43,6 +43,8 @@ pt {
    ProcedureHeading [FormalParameters _semicolon] = ‛«FormalParameters»’
 
 
+     Continuation [_semicolon Statement] = ‛«Statement»’
+     
      BeginStatement [_begin Statement SemicolonStatement* _end cont?] = ‛\n(progn«Statement»«SemicolnStatement»)«cont»’
 
      Statement [s] =‛«s»’
@@ -69,54 +71,39 @@ pt {
        CaseAlternative [Integer MoreIntegers? _colon Statement] = ’\n((«Integer» «MoreIntegers»)«Statement»)’
        CommaInteger [_comma Integer CommaInteger?] = ‛«Integer» «CommaInteger»’
 
-???
-       Expression [b] = ‛«b»’
+       Expression [bOR] = ‛«bOR»’
+       BooleanOrExpression_or [e _or eor] = ‛(or «e» «eor»)’
+       BooleanOrExpression_other [e] = ‛«e»’
 
-       Expression_eq [e1 _eq e2] = ‛(= «e1» «e2»)’
-       Expression_ne [e1 _ne e2] = ‛(not (= «e1» «e2»))’
-       Expression_lt [e1 _lt e2] = ‛(< «e1» «e2»)’
-       Expression_le [e1 _le e2] = ‛(<= «e1» «e2»)’
-       Expression_gt [e1 _gt e2] = ‛(> «e1» «e2»)’
-       Expression_ge [e1 _ge e2] = ‛(>= «e1» «e2»)’
-       Expression_or [e1 _or e2] = ‛(>= «e1» «e2»)’
-       Expression_other [e1] = ‛«e1»’
+      SimpleExpression_minus [Term _minus SimpleExpression] = ‛(- «Term» «SimpleExpression»)’
+      SimpleExpression_plus [Term _plus SimpleExpression] = ‛(+ «Term» «SimpleExpression»)’
+      SimpleExpression_other [Term _minus SimpleExpression] = ‛«Term»’
 
-??? need to invert the sense of this
-      SimpleExpression =
-        | "-" Term MoreTerm* -- neg
-        | "+"? Term MoreTerm* -- pos
-      MoreTerm = ("+" | "-" | kw<"or">) Term
-      
-      Term = 
-        | Factor "*"    Factor -- mul
-        | Factor _div"> Factor -- div
-        | Factor _mod"> Factor -- mod
-        | Factor _and"> Factor -- and
-        | Factor -- other
-	
-      Factor =
-	| Integer -- int
-	| "(" Expression ")" -- parenthesized
-	| _not"> Factor -- not
-	| Literal -- lit
-	| ID IdentifierExtension -- idwithextension
-	| ID -- other
+      Term_mul [f1 _asterisk f2] = ‛(* «f1» «f2»)’
+      Term_div [f1 _div f2] = ‛(div «f1» «f2»)’
+      Term_mod [f1 _mod f2] = ‛(mod «f1» «f2»)’
+      Term_other [f1] = ‛«f1»’
 
-       IdentifierExtension =
-         | "[" Expression "]" -- subscript
-	 | "(" Expression ")" -- paren
+      Factor_parenthesized [_lb f _rb] = ‛«f»’
+      Factor_not [_not f] = ‛(not «f»)’
+      Factor_lit [Literal] = ‛«Literal»’
+      Factor_int [Integer] = ‛«Integer»’
+      Factor_negvar [_minus v] = ‛(- «v»)’ 
+      Factor_var [_plus? v] = ‛«v»’ 
 
+      Variable_subscript [Variable Subscript] = ‛(aref «Variable» «Subscript»)’
+      Variable [ID] = ‛«ID»’
+
+      Subscript [_lb e _rb] = ‛«e»’          
        
-	Integer =
-	  | "-" unsignedInteger -- neg
-	  | "+" unsignedInteger -- pos
-	  |     unsignedInteger -- other
+       Integer_neg [_minus unsignedInteger] = ‛(- «unsignedInteger»)’
+       Integer_other [_plus? unsignedInteger] = ‛«unsignedInteger»’
 
-	  id<s> = "❲" s "❳"
-	  kw<s> = id<s>
-	  ID = "❲"  idchar+  "❳"
-	  idchar = ~"❲" ~"❳" any
-	  unsignedInteger = digit+
-	  Literal = "“" litchar* "”"
-	  litchar = ~"“" ~"”" any
+          id [_lb s _rb] = ‛«s»’
+          kw [s] = ‛«s»’
+          ID [_lb idchar+ _rb] = ‛«idchar»’
+          idchar [c] = ‛«c»’
+          unsignedInteger [digits+] = ‛«digits»’
+          Literal [_lq litchar* _rq] = ‛«litchar»’
+          litchar [c] = ‛«c»’
 }

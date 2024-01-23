@@ -1,4 +1,4 @@
-        pt {
+pt {
   Program = kw<"program"> ID FormalParameters ";" Block "."
  
   FormalParameters =
@@ -121,14 +121,13 @@
         | Factor "*"       Term -- mul
         | Factor kw<"div"> Term -- div
         | Factor kw<"mod"> Term -- mod
-        | Factor kw<"and"> Term -- and
         | Factor -- other
         
       Factor =
         | "(" Expression ")" -- parenthesized
         | kw<"not"> Factor -- not
         | Literal -- lit
-        | Integer
+        | Integer -- int
         | "-" Variable -- negvar
         | "+"? Variable -- var
 

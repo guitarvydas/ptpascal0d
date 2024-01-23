@@ -1,4 +1,4 @@
-pt {
+ptpascal0d {
   Program = kw<"program"> ID FormalParameters ";" Block "."
  
   FormalParameters =
@@ -76,7 +76,7 @@ pt {
      WhileStatement = kw<"while"> BooleanExpression kw<"do"> Statement Continuation?
      CaseStatement = kw<"case"> Expression kw<"of"> CaseAlternative+ kw<"end"> Continuation?
      RepeatStatement = kw<"repeat"> Statement kw<"until"> BooleanExpression Continuation?
-     AssignmentStatement = Lval ":=" Expression Statement? Continuation?
+     AssignmentStatement = Lval ":=" Expression Continuation?
      CallStatement =
        | ID "(" Arg CommaArg* ")"  Continuation? -- withargs
        | ID  Continuation? -- noargs
@@ -91,8 +91,8 @@ pt {
          | ID                    -- plain
 
          
-       CaseAlternative = Integer CommaInteger* ":" Statement
-       CommaInteger = "," Integer
+       CaseAlternative = Integer CommaInteger ":" Statement
+       CommaInteger = "," Integer CommaInteger?
 
      Expression = BooleanOrExpression
 

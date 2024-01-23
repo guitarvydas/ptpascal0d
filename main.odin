@@ -24,6 +24,10 @@ components_to_include_in_project :: proc (leaves: ^[dynamic]zd.Leaf_Template) {
     zd.append_leaf (leaves, std.string_constant ("words.ohm"))
     zd.append_leaf (leaves, std.string_constant ("words.rwr"))
     zd.append_leaf (leaves, std.string_constant ("null.js"))
+    zd.append_leaf (leaves, std.string_constant ("ptpascal0d"))
+    zd.append_leaf (leaves, std.string_constant ("ptpascal0d.ohm"))
+    zd.append_leaf (leaves, std.string_constant ("ptpascal0d.rwr"))
+    zd.append_leaf (leaves, std.string_constant ("ptpascal0dsupport.js"))
 }
 
 

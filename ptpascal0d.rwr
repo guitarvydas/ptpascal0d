@@ -1,4 +1,4 @@
-pt {
+ptpascal0d {
   Program [_program ID FormalParameters _semicolon Block _dot] =
     ‛\n(define («ID» «FormalParameters») «Block»)’
 
@@ -9,7 +9,7 @@ pt {
   FormalParameter_id [ID] = ‛«ID»’
     
   CommaFormalID [_comma FormalID] = ‛«FormalID»’
-  FormalID [ID] ‛«ID»’
+  FormalID [ID] = ‛«ID»’
 
   Block [ConstantDefinitions] = ‛«ConstantDefinitions»’
 
@@ -24,9 +24,9 @@ pt {
     ConstantDefinition_noconsts [TypeDefinitions] = ‛«TypeDefinitions»’
     TypeDefinition_types [ID _eq TypeBody _semicolon TypeDefinition] = ‛\n⟪+ name=«ID» kind=type def=«TypeBody»⟫«TypeDefinition»’
     TypeDefinition_notypes [VariableDeclarations] = ‛«VariableDeclarations»’
-    VariableDeclaration_vars [ID _colon TypeBody _semicolon VariableDeclaration] = ‛(let ((ID ⟪name=«ID» kind=var type=«TypeBody»⟫ nil))«VariableDeclaration»)’
+    VariableDeclaration_vars [ID _colon TypeBody _semicolon VariableDeclaration] = ‛\n(let ((ID ⟪name=«ID» kind=var type=«TypeBody»⟫ nil))«VariableDeclaration»)’
     VariableDeclaration_novars [ProcedureDefinitions] = ‛«ProcedureDefinitions»’
-    ProcedureDefinitions_proc [_procedure ID ProcedureHeading Block _semicolon ProcedureDefinitions] =‛(let ((«ID» (lambda («ProcedureHeading»)«Block»)))«ProcedureDefinitions»)’
+    ProcedureDefinitions_proc [_procedure ID ProcedureHeading Block _semicolon ProcedureDefinitions] =‛\n(let ((«ID» (lambda («ProcedureHeading»)«Block»)))«ProcedureDefinitions»)’
     ProcedureDefinitions_noproc [BeginStatement] =‛«BeginStatement»’
 
     ConstantValue [v] = ‛«v»’ 
@@ -34,7 +34,7 @@ pt {
     TypeBody_packedarray [_packed _array _lb SimpleType _rb _of SimpleType] = ‛⟪+ kind=type def=packedArray («SimpleType»)⟫’
     TypeBody_array [_array _lb SimpleType _rb _of SimpleType] = ‛⟪+ kind=type def=array («SimpleType»)⟫’
     TypeBody_file [_file _of SimpleType] = ‛⟪+ kind=type def=file («SimpleType»)⟫’
-    TypeBody_simple [_file _of SimpleType] = ‛⟪+ kind=type def=«SimpleType»⟫’
+    TypeBody_simple [SimpleType] = ‛⟪+ kind=type def=«SimpleType»⟫’
 
     SimpleType_idrange [ID _dotdot Integer] = ‛⟪+ kind=type def=idrange («ID» «Integer»)⟫’
     SimpleType_id [ID] = ‛⟪+ kind=type def=«ID»⟫’
@@ -45,7 +45,7 @@ pt {
 
      Continuation [_semicolon Statement] = ‛«Statement»’
      
-     BeginStatement [_begin Statement SemicolonStatement* _end cont?] = ‛\n(progn«Statement»«SemicolnStatement»)«cont»’
+     BeginStatement [_begin Statement _end cont?] = ‛\n(progn«Statement»)«cont»’
 
      Statement [s] =‛«s»’
 
@@ -56,7 +56,7 @@ pt {
      CaseStatement [_case Expression _of CaseAlternative+ _end cont?] ‛«_.pushNewSymbol()»’ = ‛(let ((«_.symbol()» «Expression»))«CaseAlternative»)«_.popSymbol()»«cont»’
      RepeatStatement [_repeat Statement _until Expression cont?] = ‛\n(repeat«Statement»\n«Expression»)«cont»’
      AssignmentStatement [Lval _assign Expression cont?] = ‛\n(let ((«Lval» «Expression»))«cont»)’
-     CallStatement_withargs [ID Arg MoreArgs* cont?] = ‛\n(«ID» «Arg» «MoreArgs»)«cont»’
+     CallStatement_withargs [ID _lb Arg MoreArgs* _rb cont?] = ‛\n(«ID» «Arg» «MoreArgs»)«cont»’
      CallStatement_noargs [ID  cont?] =  ‛\n(«ID»)«cont»’
 
      Arg [e] = ‛«e»’
@@ -64,20 +64,30 @@ pt {
      ColonExpression [_colon Expression] = ‛«Expression»’
      CommaArg [_comma Arg] = ‛«Arg»’
 
-       Lval_subscripted [ID _lb Expression _rb] = ’(aref «ID» «Expresssion»)’
-       Lval_plain [ID] = ’«ID»’
+       Lval_subscripted [ID _lb Expression _rb] = ‛(aref «ID» «Expresssion»)’
+       Lval_plain [ID] = ‛«ID»’
 
 	 
-       CaseAlternative [Integer MoreIntegers? _colon Statement] = ’\n((«Integer» «MoreIntegers»)«Statement»)’
+       CaseAlternative [Integer MoreIntegers? _colon Statement] = ‛\n((«Integer» «MoreIntegers»)«Statement»)’
        CommaInteger [_comma Integer CommaInteger?] = ‛«Integer» «CommaInteger»’
 
        Expression [bOR] = ‛«bOR»’
        BooleanOrExpression_or [e _or eor] = ‛(or «e» «eor»)’
        BooleanOrExpression_other [e] = ‛«e»’
+       BooleanAndExpression_and [e _and eand] = ‛(and «e» «eand»)’
+       BooleanAndExpression_other [e] = ‛«e»’
+
+       BooleanExpression_eq [se _eq be] = ‛(= «se» «be»)’
+       BooleanExpression_ne [se _ne be] = ‛(not (= «se» «be»))’
+       BooleanExpression_lt [se _lt be] = ‛(< «se» «be»)’
+       BooleanExpression_le [se _le be] = ‛(<= «se» «be»)’
+       BooleanExpression_gt [se _gt be] = ‛(> «se» «be»)’
+       BooleanExpression_ge [se _ge be] = ‛(>= «se» «be»)’
+       BooleanExpression_other [se] = ‛«se»’
 
       SimpleExpression_minus [Term _minus SimpleExpression] = ‛(- «Term» «SimpleExpression»)’
       SimpleExpression_plus [Term _plus SimpleExpression] = ‛(+ «Term» «SimpleExpression»)’
-      SimpleExpression_other [Term _minus SimpleExpression] = ‛«Term»’
+      SimpleExpression_other [Term] = ‛«Term»’
 
       Term_mul [f1 _asterisk f2] = ‛(* «f1» «f2»)’
       Term_div [f1 _div f2] = ‛(div «f1» «f2»)’
@@ -104,6 +114,6 @@ pt {
           ID [_lb idchar+ _rb] = ‛«idchar»’
           idchar [c] = ‛«c»’
           unsignedInteger [digits+] = ‛«digits»’
-          Literal [_lq litchar* _rq] = ‛«litchar»’
+          Literal [_lq litchar* _rq] = ‛"«litchar»"’
           litchar [c] = ‛«c»’
 }

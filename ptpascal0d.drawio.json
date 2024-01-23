@@ -4,12 +4,16 @@
         "name": "main",
         "children": [
             {
-                "name": "Tokenize",
+                "name": "PT Pascal",
                 "id": 3
             },
             {
                 "name": "Read Text File",
                 "id": 6
+            },
+            {
+                "name": "Tokenize",
+                "id": 12
             }
         ],
         "connections": [
@@ -35,9 +39,35 @@
                 "source_port": "output",
                 "target": {
                     "name": "Tokenize",
+                    "id": 12
+                },
+                "target_port": "input"
+            },
+            {
+                "dir": 1,
+                "source": {
+                    "name": "Tokenize",
+                    "id": 12
+                },
+                "source_port": "output",
+                "target": {
+                    "name": "PT Pascal",
                     "id": 3
                 },
                 "target_port": "input"
+            },
+            {
+                "dir": 2,
+                "source": {
+                    "name": "Tokenize",
+                    "id": 12
+                },
+                "source_port": "error",
+                "target": {
+                    "name": "",
+                    "id": 0
+                },
+                "target_port": "error"
             },
             {
                 "dir": 2,
@@ -55,7 +85,7 @@
             {
                 "dir": 2,
                 "source": {
-                    "name": "Tokenize",
+                    "name": "PT Pascal",
                     "id": 3
                 },
                 "source_port": "output",
@@ -68,7 +98,7 @@
             {
                 "dir": 2,
                 "source": {
-                    "name": "Tokenize",
+                    "name": "PT Pascal",
                     "id": 3
                 },
                 "source_port": "error",
@@ -527,19 +557,15 @@
             },
             {
                 "name": "'ptpascal0d.ohm'",
-                "id": 19
+                "id": 17
             },
             {
-                "name": "Read Text File",
+                "name": "'ptpascal0d'",
                 "id": 20
             },
             {
                 "name": "'ptpascal0dsupport.js'",
-                "id": 25
-            },
-            {
-                "name": "'ptpascal0d'",
-                "id": 26
+                "id": 23
             }
         ],
         "connections": [
@@ -551,8 +577,8 @@
                 },
                 "source_port": "input",
                 "target": {
-                    "name": "'ptpascal0d'",
-                    "id": 26
+                    "name": "'ptpascal0dsupport.js'",
+                    "id": 23
                 },
                 "target_port": "\u237a"
             },
@@ -564,8 +590,8 @@
                 },
                 "source_port": "input",
                 "target": {
-                    "name": "'ptpascal0dsupport.js'",
-                    "id": 25
+                    "name": "'ptpascal0d'",
+                    "id": 20
                 },
                 "target_port": "\u237a"
             },
@@ -578,7 +604,7 @@
                 "source_port": "input",
                 "target": {
                     "name": "'ptpascal0d.ohm'",
-                    "id": 19
+                    "id": 17
                 },
                 "target_port": "\u237a"
             },
@@ -603,42 +629,16 @@
                 },
                 "source_port": "input",
                 "target": {
-                    "name": "Read Text File",
-                    "id": 20
-                },
-                "target_port": "input"
-            },
-            {
-                "dir": 1,
-                "source": {
-                    "name": "Read Text File",
-                    "id": 20
-                },
-                "source_port": "str",
-                "target": {
                     "name": "Transpile",
                     "id": 9
                 },
                 "target_port": "input"
-            },
-            {
-                "dir": 1,
-                "source": {
-                    "name": "'ptpascal0d'",
-                    "id": 26
-                },
-                "source_port": "\u237a",
-                "target": {
-                    "name": "Transpile",
-                    "id": 9
-                },
-                "target_port": "grammar name"
             },
             {
                 "dir": 1,
                 "source": {
                     "name": "'ptpascal0dsupport.js'",
-                    "id": 25
+                    "id": 23
                 },
                 "source_port": "\u237a",
                 "target": {
@@ -646,6 +646,19 @@
                     "id": 9
                 },
                 "target_port": "rwrsupportfn"
+            },
+            {
+                "dir": 1,
+                "source": {
+                    "name": "'ptpascal0d.ohm'",
+                    "id": 17
+                },
+                "source_port": "\u237a",
+                "target": {
+                    "name": "Transpile",
+                    "id": 9
+                },
+                "target_port": "ohmfn"
             },
             {
                 "dir": 1,
@@ -663,28 +676,15 @@
             {
                 "dir": 1,
                 "source": {
-                    "name": "'ptpascal0d.ohm'",
-                    "id": 19
+                    "name": "'ptpascal0d'",
+                    "id": 20
                 },
                 "source_port": "\u237a",
                 "target": {
                     "name": "Transpile",
                     "id": 9
                 },
-                "target_port": "ohmfn"
-            },
-            {
-                "dir": 2,
-                "source": {
-                    "name": "Read Text File",
-                    "id": 20
-                },
-                "source_port": "error",
-                "target": {
-                    "name": "",
-                    "id": 0
-                },
-                "target_port": "error"
+                "target_port": "grammar name"
             },
             {
                 "dir": 2,
